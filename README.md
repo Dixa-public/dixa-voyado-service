@@ -137,7 +137,7 @@ sequenceDiagram
 Configure Dixa to send webhooks to:
 
 ```
-http://your-domain.com/webhook/dixa/csat
+https://the-domain-you-deployed-this-service-on.com/webhook/dixa/csat
 ```
 
 ### Voyado Webhook Setup
@@ -145,8 +145,32 @@ http://your-domain.com/webhook/dixa/csat
 Configure Voyado to send webhooks to:
 
 ```
-http://your-domain.com/webhook/voyado/points
+https://the-domain-you-deployed-this-service-on.com/webhook/voyado/points
 ```
+
+## Demo
+
+A demo service is running on:
+
+```
+https://dixa-voyado-service-production.up.railway.app
+```
+
+The demo Dixa webhooks is configured to:
+
+```
+https://dixa-voyado-service-production.up.railway.app/webhook/dixa/csat
+```
+
+![Dixa Websocket Interface](dixa-websocket-interface.png)
+
+The Voyado webhooks is configured to:
+
+```
+https://dixa-voyado-service-production.up.railway.app/webhook/voyado/points
+```
+
+![Voyado Websocket Interface](voyado-websocket-interface.png)
 
 ## Example Usage
 
@@ -201,8 +225,6 @@ curl -X POST http://localhost:3000/webhook/voyado/points \
 
 - The service uses the customer's email as the contact identifier for Voyado
 - In production, you may need to implement proper contact ID mapping
-- Each new CSAT event overwrites the previous one in memory
-- The service includes comprehensive error handling and logging
 
 ## Railway Deployment
 
@@ -218,7 +240,8 @@ This service is designed to be deployed on Railway. Railway will automatically:
 1. **Connect your GitHub repository** to Railway
 2. **Set environment variables** in Railway dashboard:
    - `VOYADO_API_KEY`: Your Voyado API key
-   - `VOYADO_API_BASE_URL`: `https://dixa.staging.voyado.com/api/v3`
+   - `VOYADO_API_BASE_URL`: `https://yourdomain.voyado.com/api/v3`
+   - `PORT`: `8080`
 3. **Deploy** - Railway will automatically build and deploy your service
 
 ### Webhook URLs for Railway
