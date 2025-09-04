@@ -169,12 +169,27 @@ app.get("/health", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Dixa CSAT webhook endpoint: /webhook/dixa/csat`);
   console.log(`💰 Voyado points webhook endpoint: /webhook/voyado/points`);
   console.log(`🔍 Latest CSAT endpoint: /latest-csat`);
   console.log(`❤️  Health check: /health`);
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+  });
 });
 
 module.exports = app;
