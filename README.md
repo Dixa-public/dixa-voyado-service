@@ -8,7 +8,6 @@ A web service built with Express.js that handles CSAT rating webhooks from Dixa 
 - **Voyado Points Integration**: Automatically awards loyalty points based on CSAT scores
 - **Voyado Webhook Handler**: Receives point balance updates from Voyado
 - **Smart Point Calculation**: Different point amounts based on satisfaction scores
-- **Event Storage**: Stores the latest CSAT event (overwrites previous)
 
 ## System Architecture
 
