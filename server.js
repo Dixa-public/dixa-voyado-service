@@ -24,20 +24,20 @@ function calculatePoints(score) {
 }
 
 // Helper function to lookup contact by email or phone
-async function lookupContactId(identifier, type = 'email') {
+async function lookupContactId(identifier, type = "email") {
   try {
-    const queryParam = type === 'phone' ? 'mobilePhone' : 'email';
+    const queryParam = type === "phone" ? "mobilePhone" : "email";
     const encodedIdentifier = encodeURIComponent(identifier);
     const lookupUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/id?${queryParam}=${encodedIdentifier}`;
-    
+
     console.log(`🔍 Looking up contact with ${type}: ${identifier}`);
-    
+
     const response = await axios.get(lookupUrl, {
       headers: {
-        'apikey': process.env.VOYADO_API_KEY,
-        'Content-Type': 'application/json',
-        'User-Agent': 'DixaVoyadoService/1.0'
-      }
+        apikey: process.env.VOYADO_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
     });
 
     if (response.data && response.data.id) {
@@ -48,7 +48,10 @@ async function lookupContactId(identifier, type = 'email') {
       return null;
     }
   } catch (error) {
-    console.error(`❌ Error looking up contact:`, error.response?.data || error.message);
+    console.error(
+      `❌ Error looking up contact:`,
+      error.response?.data || error.message
+    );
     return null;
   }
 }
@@ -74,9 +77,9 @@ async function addPointsToVoyado(contactId, points, description) {
 
     const response = await axios.post(voyadoUrl, payload, {
       headers: {
-        'apikey': process.env.VOYADO_API_KEY,
-        'Content-Type': 'application/json',
-        'User-Agent': 'DixaVoyadoService/1.0'
+        apikey: process.env.VOYADO_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
       },
     });
 
@@ -122,7 +125,7 @@ app.post("/webhook/dixa/csat", (req, res) => {
     console.log(`   Points to award: ${points}`);
 
     // First lookup the contact ID in Voyado, then add points
-    lookupContactId(contactEmail, 'email')
+    lookupContactId(contactEmail, "email")
       .then((contactId) => {
         if (contactId) {
           return addPointsToVoyado(
@@ -131,7 +134,9 @@ app.post("/webhook/dixa/csat", (req, res) => {
             `CSAT feedback - Score: ${score}/5 - ${comment}`
           );
         } else {
-          console.log(`   ⚠️  No Voyado contact found for email: ${contactEmail}`);
+          console.log(
+            `   ⚠️  No Voyado contact found for email: ${contactEmail}`
+          );
           return null;
         }
       })
@@ -189,27 +194,27 @@ app.post("/webhook/voyado/points", (req, res) => {
 app.get("/test-lookup/:type/:identifier", async (req, res) => {
   try {
     const { type, identifier } = req.params;
-    
-    if (!['email', 'phone'].includes(type)) {
+
+    if (!["email", "phone"].includes(type)) {
       return res.status(400).json({ error: "Type must be 'email' or 'phone'" });
     }
-    
+
     console.log(`🧪 Testing contact lookup for ${type}: ${identifier}`);
-    
+
     const contactId = await lookupContactId(identifier, type);
-    
+
     if (contactId) {
       res.json({
         message: "Contact found",
         type: type,
         identifier: identifier,
-        contactId: contactId
+        contactId: contactId,
       });
     } else {
       res.status(404).json({
         message: "Contact not found",
         type: type,
-        identifier: identifier
+        identifier: identifier,
       });
     }
   } catch (error) {
@@ -254,7 +259,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     `💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`
   );
   console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
-  console.log(`🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`);
+  console.log(
+    `🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`
+  );
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
