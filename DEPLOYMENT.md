@@ -91,6 +91,7 @@ Your webhook endpoints will be:
 2. **Environment variables not set**: Verify in Railway Variables tab
 3. **Port binding errors**: Railway automatically sets PORT environment variable
 4. **Webhook not receiving**: Check Railway logs and webhook configuration
+5. **npm start errors**: The service now includes multiple startup methods (Procfile, start.sh, and direct node command)
 
 ### Useful Commands:
 
@@ -113,3 +114,24 @@ If you encounter issues:
 2. Verify environment variables are set correctly
 3. Test the health endpoint: `/health`
 4. Check webhook configurations in Dixa and Voyado
+
+### Troubleshooting npm start errors
+
+If you see errors like:
+```
+npm error path /app
+npm error command failed
+npm error signal SIGTERM
+```
+
+**Solutions:**
+1. **Railway will automatically use the Procfile** - no action needed
+2. **Check that all files are committed** to GitHub
+3. **Verify the railway.json** is in your repository
+4. **Ensure start.sh is executable** (should be committed as executable)
+5. **Try redeploying** - Railway will use the new configuration
+
+The service now includes multiple startup methods:
+- **Procfile** (Railway's preferred method)
+- **start.sh script** (with debugging output)
+- **Direct node command** (fallback)
