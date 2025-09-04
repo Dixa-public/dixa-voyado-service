@@ -23,6 +23,36 @@ function calculatePoints(score) {
   }
 }
 
+// Helper function to lookup contact by email or phone
+async function lookupContactId(identifier, type = 'email') {
+  try {
+    const queryParam = type === 'phone' ? 'mobilePhone' : 'email';
+    const encodedIdentifier = encodeURIComponent(identifier);
+    const lookupUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/id?${queryParam}=${encodedIdentifier}`;
+    
+    console.log(`🔍 Looking up contact with ${type}: ${identifier}`);
+    
+    const response = await axios.get(lookupUrl, {
+      headers: {
+        'apikey': process.env.VOYADO_API_KEY,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DixaVoyadoService/1.0'
+      }
+    });
+
+    if (response.data && response.data.id) {
+      console.log(`✅ Found contact ID: ${response.data.id}`);
+      return response.data.id;
+    } else {
+      console.log(`❌ No contact found for ${type}: ${identifier}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error looking up contact:`, error.response?.data || error.message);
+    return null;
+  }
+}
+
 // Helper function to make Voyado API request
 async function addPointsToVoyado(contactId, points, description) {
   try {
@@ -44,8 +74,9 @@ async function addPointsToVoyado(contactId, points, description) {
 
     const response = await axios.post(voyadoUrl, payload, {
       headers: {
-        Authorization: `Bearer ${process.env.VOYADO_API_KEY}`,
-        "Content-Type": "application/json",
+        'apikey': process.env.VOYADO_API_KEY,
+        'Content-Type': 'application/json',
+        'User-Agent': 'DixaVoyadoService/1.0'
       },
     });
 
@@ -90,13 +121,20 @@ app.post("/webhook/dixa/csat", (req, res) => {
     const points = calculatePoints(score);
     console.log(`   Points to award: ${points}`);
 
-    // Add points to Voyado (using email as contact identifier)
-    // Note: In a real implementation, you'd need to map the email to a Voyado contact ID
-    addPointsToVoyado(
-      contactEmail,
-      points,
-      `CSAT feedback - Score: ${score}/5 - ${comment}`
-    )
+    // First lookup the contact ID in Voyado, then add points
+    lookupContactId(contactEmail, 'email')
+      .then((contactId) => {
+        if (contactId) {
+          return addPointsToVoyado(
+            contactId,
+            points,
+            `CSAT feedback - Score: ${score}/5 - ${comment}`
+          );
+        } else {
+          console.log(`   ⚠️  No Voyado contact found for email: ${contactEmail}`);
+          return null;
+        }
+      })
       .then(() => {
         console.log(`   ✅ Points successfully added to Voyado`);
       })
@@ -147,6 +185,39 @@ app.post("/webhook/voyado/points", (req, res) => {
   }
 });
 
+// Test contact lookup endpoint
+app.get("/test-lookup/:type/:identifier", async (req, res) => {
+  try {
+    const { type, identifier } = req.params;
+    
+    if (!['email', 'phone'].includes(type)) {
+      return res.status(400).json({ error: "Type must be 'email' or 'phone'" });
+    }
+    
+    console.log(`🧪 Testing contact lookup for ${type}: ${identifier}`);
+    
+    const contactId = await lookupContactId(identifier, type);
+    
+    if (contactId) {
+      res.json({
+        message: "Contact found",
+        type: type,
+        identifier: identifier,
+        contactId: contactId
+      });
+    } else {
+      res.status(404).json({
+        message: "Contact not found",
+        type: type,
+        identifier: identifier
+      });
+    }
+  } catch (error) {
+    console.error("❌ Error in test lookup:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Get latest CSAT event
 app.get("/latest-csat", (req, res) => {
   if (!latestCsatEvent) {
@@ -183,6 +254,7 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     `💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`
   );
   console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
+  console.log(`🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`);
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
