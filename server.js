@@ -169,31 +169,35 @@ app.get("/health", (req, res) => {
 });
 
 // Start server
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   const localAddress = `http://localhost:${PORT}`;
   const networkAddress = `http://0.0.0.0:${PORT}`;
-  
+
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Local address: ${localAddress}`);
   console.log(`🌐 Network address: ${networkAddress}`);
-  console.log(`📊 Dixa CSAT webhook endpoint: ${localAddress}/webhook/dixa/csat`);
-  console.log(`💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`);
+  console.log(
+    `📊 Dixa CSAT webhook endpoint: ${localAddress}/webhook/dixa/csat`
+  );
+  console.log(
+    `💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`
+  );
   console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
 // Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down gracefully");
   server.close(() => {
-    console.log('Process terminated');
+    console.log("Process terminated");
   });
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
+process.on("SIGINT", () => {
+  console.log("SIGINT received, shutting down gracefully");
   server.close(() => {
-    console.log('Process terminated');
+    console.log("Process terminated");
   });
 });
 
