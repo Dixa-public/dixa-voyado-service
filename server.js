@@ -31,6 +31,14 @@ async function lookupContactId(identifier, type = "email") {
     const lookupUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/id?${queryParam}=${encodedIdentifier}`;
 
     console.log(`🔍 Looking up contact with ${type}: ${identifier}`);
+    console.log(`📍 Full lookup URL: ${lookupUrl}`);
+    console.log(`🔑 API Key: ${process.env.VOYADO_API_KEY}`);
+    console.log(`🌐 Base URL: ${process.env.VOYADO_API_BASE_URL}`);
+    console.log(`📋 Request headers:`, {
+      apikey: process.env.VOYADO_API_KEY,
+      "Content-Type": "application/json",
+      "User-Agent": "DixaVoyadoService/1.0",
+    });
 
     const response = await axios.get(lookupUrl, {
       headers: {
@@ -40,18 +48,41 @@ async function lookupContactId(identifier, type = "email") {
       },
     });
 
-    if (response.data && response.data.id) {
-      console.log(`✅ Found contact ID: ${response.data.id}`);
-      return response.data.id;
+    console.log(`📡 Response status: ${response.status}`);
+    console.log(`📡 Response headers:`, response.headers);
+    console.log(`📡 Response data:`, JSON.stringify(response.data, null, 2));
+
+    // Handle both response formats: string ID or object with id property
+    let contactId = null;
+    if (typeof response.data === "string" && response.data) {
+      // Direct string response (what Voyado actually returns)
+      contactId = response.data;
+      console.log(`✅ Found contact ID (string): ${contactId}`);
+    } else if (response.data && response.data.id) {
+      // Object response with id property
+      contactId = response.data.id;
+      console.log(`✅ Found contact ID (object): ${contactId}`);
     } else {
       console.log(`❌ No contact found for ${type}: ${identifier}`);
+      console.log(`❌ Response data structure:`, response.data);
       return null;
     }
+
+    return contactId;
   } catch (error) {
-    console.error(
-      `❌ Error looking up contact:`,
-      error.response?.data || error.message
-    );
+    console.error(`❌ Error looking up contact:`);
+    console.error(`❌ Error message:`, error.message);
+    if (error.response) {
+      console.error(`❌ Response status:`, error.response.status);
+      console.error(`❌ Response headers:`, error.response.headers);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    if (error.request) {
+      console.error(`❌ Request details:`, error.request);
+    }
     return null;
   }
 }
