@@ -224,13 +224,8 @@ app.post("/webhook/dixa/csat", (req, res) => {
           return null;
         }
       })
-      .then((result) => {
-        console.log(`   💰 Result:`, result);
-        if (result) {
-          console.log(`   ✅ Points successfully added to Voyado`);
-        } else {
-          console.log(`   ⚠️  No points added - no point account available`);
-        }
+      .then(() => {
+        console.log(`   ✅ Points successfully added to Voyado`);
       })
       .catch((error) => {
         console.error(`   ❌ Failed to add points to Voyado: ${error.message}`);
