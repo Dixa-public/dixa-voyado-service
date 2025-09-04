@@ -225,6 +225,7 @@ app.post("/webhook/dixa/csat", (req, res) => {
         }
       })
       .then((result) => {
+        console.log(`   💰 Result:`, result);
         if (result) {
           console.log(`   ✅ Points successfully added to Voyado`);
         } else {

@@ -10,6 +10,78 @@ A web service built with Express.js that handles CSAT rating webhooks from Dixa 
 - **Smart Point Calculation**: Different point amounts based on satisfaction scores
 - **Event Storage**: Stores the latest CSAT event (overwrites previous)
 
+## System Architecture
+
+The following sequence diagram illustrates the complete data flow from Dixa CSAT rating to Voyado points integration:
+
+```mermaid
+sequenceDiagram
+    participant Dixa as Dixa Platform
+    participant Service as Dixa-Voyado Service
+    participant Voyado as Voyado API
+    participant DB as Voyado Database
+
+    Note over Dixa,DB: CSAT Rating Flow
+
+    %% Step 1: Dixa sends CSAT webhook
+    Dixa->>Service: POST /webhook/dixa/csat
+    Note right of Dixa: CSAT Rating Event<br/>score: 4, comment: "Great service!"
+
+    %% Step 2: Service processes webhook
+    Service->>Service: Parse webhook payload
+    Service->>Service: Calculate points (score ≥ 4 = 15 points)
+    Service->>Service: Extract contact email/phone
+
+    %% Step 3: Lookup contact ID in Voyado
+    Service->>Voyado: GET /api/v3/contacts/id?email=test@domain.com
+    Note right of Service: Headers: apikey, User-Agent
+    Voyado->>DB: Query contact by email
+    DB-->>Voyado: Return contact ID
+    Voyado-->>Service: 200 OK: "eb69b55a-d76b-4f45-b14a-b34d00865c2e"
+
+    %% Step 4: Get point account ID
+    Service->>Voyado: GET /api/v3/point-accounts?contactId={contactId}
+    Note right of Service: Headers: apikey, User-Agent
+    Voyado->>DB: Query point accounts by contact ID
+    DB-->>Voyado: Return point account details
+    Voyado-->>Service: 200 OK: [{id: "84415149-b3b4-4eca-8404-bde4230d50bf", ...}]
+
+    %% Step 5: Add points to Voyado
+    Service->>Service: Generate unique transactionId (UUID)
+    Service->>Voyado: POST /api/v3/point-transactions
+    Note right of Service: Payload: {<br/>  accountId: "84415149-b3b4-4eca-8404-bde4230d50bf",<br/>  transactionId: "uuid-here",<br/>  amount: 15,<br/>  description: "CSAT feedback Loyalty points added",<br/>  ...<br/>}
+    Voyado->>DB: Create point transaction
+    DB-->>Voyado: Transaction created
+    Voyado-->>Service: 202 Accepted
+
+    %% Step 6: Service confirms success
+    Service->>Service: Log success
+    Service-->>Dixa: 200 OK
+
+    Note over Dixa,DB: Point Balance Update Flow (Async)
+
+    %% Step 7: Voyado processes transaction asynchronously
+    Voyado->>DB: Update point balance
+    DB-->>Voyado: Balance updated
+
+    %% Step 8: Voyado sends webhook notification
+    Voyado->>Service: POST /webhook/voyado/points
+    Note right of Voyado: Payload: {<br/>  eventType: "point.balance.updated",<br/>  payload: {<br/>    accountId: 123,<br/>    balance: 1015.1234,<br/>    contactId: "eb69b55a-d76b-4f45-b14a-b34d00865c2e"<br/>  }<br/>}
+
+    %% Step 9: Service logs webhook
+    Service->>Service: Log point balance update
+    Service-->>Voyado: 200 OK
+```
+
+### Key Data Flow Steps
+
+1. **CSAT Webhook Reception**: Dixa sends rating data to the service
+2. **Point Calculation**: Service calculates loyalty points based on CSAT score
+3. **Contact Lookup**: Service finds the customer's Voyado contact ID
+4. **Point Account Retrieval**: Service gets the customer's point account ID
+5. **Points Addition**: Service adds points to Voyado with unique transaction ID
+6. **Balance Update Notification**: Voyado sends webhook confirming balance change
+
 ## Point Calculation Logic
 
 - **Score ≤ 2**: 10 points (compensation for poor experience)

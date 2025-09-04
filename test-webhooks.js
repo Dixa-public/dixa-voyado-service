@@ -87,50 +87,6 @@ async function testVoyadoWebhook() {
   }
 }
 
-async function testAddPoints() {
-  try {
-    console.log("\n🧪 Testing Add Points Endpoint");
-
-    // First, get a contact ID by looking up nederby@gmail.com
-    console.log("   🔍 Looking up contact: nederby@gmail.com");
-    const lookupResponse = await axios.get(
-      `${BASE_URL}/test-lookup/email/nederby%40gmail.com`
-    );
-
-    if (lookupResponse.data.contactId) {
-      const contactId = lookupResponse.data.contactId;
-      console.log(`   ✅ Found contact ID: ${contactId}`);
-
-      // Test adding 25 test points
-      const pointsPayload = {
-        contactId: contactId,
-        points: 25,
-        description: "Test points for API testing",
-      };
-
-      console.log(`   💰 Adding ${pointsPayload.points} points...`);
-      const addResponse = await axios.post(
-        `${BASE_URL}/test-add-points`,
-        pointsPayload
-      );
-
-      console.log(`   ✅ Response: ${addResponse.data.message}`);
-      if (addResponse.data.result) {
-        console.log(
-          `   📊 Result:`,
-          JSON.stringify(addResponse.data.result, null, 2)
-        );
-      }
-    } else {
-      console.log("   ❌ No contact found for testing");
-    }
-  } catch (error) {
-    console.error(
-      `   ❌ Error: ${error.response?.data?.error || error.message}`
-    );
-  }
-}
-
 async function runTests() {
   console.log("🚀 Starting Webhook Service Tests\n");
 
@@ -152,9 +108,6 @@ async function runTests() {
 
   // Test Voyado webhook
   await testVoyadoWebhook();
-
-  // Test add points endpoint
-  await testAddPoints();
 
   // Check latest CSAT event
   try {
