@@ -131,7 +131,7 @@ async function addPointsToVoyado(contactId, points, description) {
       source: "Automation",
       transactionDate: now,
       validFrom: now,
-      validTo: now,
+      validTo: null,
     };
 
     console.log(
