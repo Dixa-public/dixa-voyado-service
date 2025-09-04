@@ -170,11 +170,16 @@ app.get("/health", (req, res) => {
 
 // Start server
 const server = app.listen(PORT, '0.0.0.0', () => {
+  const localAddress = `http://localhost:${PORT}`;
+  const networkAddress = `http://0.0.0.0:${PORT}`;
+  
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Dixa CSAT webhook endpoint: /webhook/dixa/csat`);
-  console.log(`💰 Voyado points webhook endpoint: /webhook/voyado/points`);
-  console.log(`🔍 Latest CSAT endpoint: /latest-csat`);
-  console.log(`❤️  Health check: /health`);
+  console.log(`📍 Local address: ${localAddress}`);
+  console.log(`🌐 Network address: ${networkAddress}`);
+  console.log(`📊 Dixa CSAT webhook endpoint: ${localAddress}/webhook/dixa/csat`);
+  console.log(`💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`);
+  console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
+  console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
 // Handle graceful shutdown

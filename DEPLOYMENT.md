@@ -118,6 +118,7 @@ If you encounter issues:
 ### Troubleshooting npm start errors
 
 If you see errors like:
+
 ```
 npm error path /app
 npm error command failed
@@ -125,6 +126,7 @@ npm error signal SIGTERM
 ```
 
 **Solutions:**
+
 1. **Railway will automatically use the Procfile** - no action needed
 2. **Check that all files are committed** to GitHub
 3. **Verify the railway.json** is in your repository
@@ -132,6 +134,7 @@ npm error signal SIGTERM
 5. **Try redeploying** - Railway will use the new configuration
 
 The service now includes multiple startup methods:
+
 - **Procfile** (Railway's preferred method)
 - **start.sh script** (with debugging output)
 - **Direct node command** (fallback)
