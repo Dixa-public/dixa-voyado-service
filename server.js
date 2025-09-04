@@ -31,14 +31,6 @@ async function lookupContactId(identifier, type = "email") {
     const lookupUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/id?${queryParam}=${encodedIdentifier}`;
 
     console.log(`🔍 Looking up contact with ${type}: ${identifier}`);
-    console.log(`📍 Full lookup URL: ${lookupUrl}`);
-    console.log(`🔑 API Key: ${process.env.VOYADO_API_KEY}`);
-    console.log(`🌐 Base URL: ${process.env.VOYADO_API_BASE_URL}`);
-    console.log(`📋 Request headers:`, {
-      apikey: process.env.VOYADO_API_KEY,
-      "Content-Type": "application/json",
-      "User-Agent": "DixaVoyadoService/1.0",
-    });
 
     const response = await axios.get(lookupUrl, {
       headers: {
@@ -49,8 +41,6 @@ async function lookupContactId(identifier, type = "email") {
     });
 
     console.log(`📡 Response status: ${response.status}`);
-    console.log(`📡 Response headers:`, response.headers);
-    console.log(`📡 Response data:`, JSON.stringify(response.data, null, 2));
 
     // Handle both response formats: string ID or object with id property
     let contactId = null;
@@ -70,18 +60,9 @@ async function lookupContactId(identifier, type = "email") {
 
     return contactId;
   } catch (error) {
-    console.error(`❌ Error looking up contact:`);
-    console.error(`❌ Error message:`, error.message);
+    console.error(`❌ Error looking up contact: ${error.message}`);
     if (error.response) {
-      console.error(`❌ Response status:`, error.response.status);
-      console.error(`❌ Response headers:`, error.response.headers);
-      console.error(
-        `❌ Response data:`,
-        JSON.stringify(error.response.data, null, 2)
-      );
-    }
-    if (error.request) {
-      console.error(`❌ Request details:`, error.request);
+      console.error(`❌ Response status: ${error.response.status}`);
     }
     return null;
   }
@@ -93,7 +74,6 @@ async function getPointAccount(contactId) {
     const accountUrl = `${process.env.VOYADO_API_BASE_URL}/point-accounts?contactId=${contactId}`;
 
     console.log(`🔍 Getting point account for contact: ${contactId}`);
-    console.log(`📍 Account URL: ${accountUrl}`);
 
     const response = await axios.get(accountUrl, {
       headers: {
@@ -111,25 +91,21 @@ async function getPointAccount(contactId) {
 
     if (
       response.data &&
-      response.data.items &&
-      response.data.items.length > 0
+      Array.isArray(response.data) &&
+      response.data.length > 0
     ) {
-      const account = response.data.items[0];
+      const account = response.data[0];
       console.log(`✅ Found point account: ${account.id}`);
       return account.id;
     } else {
       console.log(`❌ No point account found for contact: ${contactId}`);
+      console.log(`❌ Response data structure:`, response.data);
       return null;
     }
   } catch (error) {
-    console.error(`❌ Error getting point account:`);
-    console.error(`❌ Error message:`, error.message);
+    console.error(`❌ Error getting point account: ${error.message}`);
     if (error.response) {
-      console.error(`❌ Response status:`, error.response.status);
-      console.error(
-        `❌ Response data:`,
-        JSON.stringify(error.response.data, null, 2)
-      );
+      console.error(`❌ Response status: ${error.response.status}`);
     }
     return null;
   }
@@ -139,8 +115,12 @@ async function getPointAccount(contactId) {
 async function addPointsToVoyado(contactId, points, description) {
   try {
     const voyadoUrl = `${process.env.VOYADO_API_BASE_URL}/point-transactions`;
-    const transactionId = `dixa-automation-${uuidv4()}`;
+    const transactionId = uuidv4();
     const now = new Date().toISOString();
+
+    // Debug: Verify UUID generation
+    console.log(`   Generated UUID: ${uuidv4()}`);
+    console.log(`   Full transaction ID: ${transactionId}`);
 
     const payload = {
       accountId: contactId, // Using contactId as accountId for simplicity
@@ -154,12 +134,11 @@ async function addPointsToVoyado(contactId, points, description) {
       validTo: now,
     };
 
-    console.log(`💰 Adding points to Voyado:`);
-    console.log(`   URL: ${voyadoUrl}`);
-    console.log(`   Contact ID: ${contactId}`);
-    console.log(`   Points: ${points}`);
+    console.log(
+      `💰 Adding ${points} points to Voyado for contact ${contactId}`
+    );
     console.log(`   Transaction ID: ${transactionId}`);
-    console.log(`   Full payload:`, JSON.stringify(payload, null, 2));
+    console.log(`   Payload:`, JSON.stringify(payload, null, 2));
 
     const response = await axios.post(voyadoUrl, payload, {
       headers: {
@@ -172,22 +151,15 @@ async function addPointsToVoyado(contactId, points, description) {
     console.log(
       `✅ Successfully added ${points} points to Voyado for contact ${contactId}`
     );
-    console.log(`📡 Response status: ${response.status}`);
-    console.log(`📡 Response data:`, JSON.stringify(response.data, null, 2));
     return response.data;
   } catch (error) {
-    console.error(`❌ Error adding points to Voyado:`);
-    console.error(`❌ Error message:`, error.message);
+    console.error(`❌ Error adding points to Voyado: ${error.message}`);
+    console.error(
+      `❌ Response data:`,
+      JSON.stringify(error.response.data, null, 2)
+    );
     if (error.response) {
-      console.error(`❌ Response status:`, error.response.status);
-      console.error(`❌ Response headers:`, error.response.headers);
-      console.error(
-        `❌ Response data:`,
-        JSON.stringify(error.response.data, null, 2)
-      );
-    }
-    if (error.request) {
-      console.error(`❌ Request details:`, error.request);
+      console.error(`❌ Response status: ${error.response.status}`);
     }
     throw error;
   }
@@ -211,11 +183,9 @@ app.post("/webhook/dixa/csat", (req, res) => {
     const contactEmail = event.data.conversation.requester.email;
     const contactName = event.data.conversation.requester.name;
 
-    console.log("📊 CSAT Rating Received:");
-    console.log(`   Score: ${score}/5`);
-    console.log(`   Comment: "${comment}"`);
-    console.log(`   Contact: ${contactName} (${contactEmail})`);
-    console.log(`   Event ID: ${event.event_id}`);
+    console.log(
+      `📊 CSAT Rating: ${score}/5 - "${comment}" from ${contactName} (${contactEmail})`
+    );
 
     // Calculate points based on score
     const points = calculatePoints(score);
@@ -246,21 +216,23 @@ app.post("/webhook/dixa/csat", (req, res) => {
           );
         } else {
           console.log(
-            `   ⚠️  No point account found, trying to create one by adding points directly...`
+            `   ❌ No point account found for contact: ${foundContactId}`
           );
-          // Try to add points directly - Voyado should create the point account automatically
-          return addPointsToVoyado(
-            foundContactId, // Use stored contact ID
-            points,
-            `CSAT feedback - Score: ${score}/5 - ${comment}`
+          console.log(
+            `   ⚠️  Points cannot be awarded without an existing point account`
           );
+          return null;
         }
       })
-      .then(() => {
-        console.log(`   ✅ Points successfully added to Voyado`);
+      .then((result) => {
+        if (result) {
+          console.log(`   ✅ Points successfully added to Voyado`);
+        } else {
+          console.log(`   ⚠️  No points added - no point account available`);
+        }
       })
       .catch((error) => {
-        console.error(`   ❌ Failed to add points to Voyado:`, error.message);
+        console.error(`   ❌ Failed to add points to Voyado: ${error.message}`);
       });
 
     res.status(200).json({
@@ -339,6 +311,54 @@ app.get("/test-lookup/:type/:identifier", async (req, res) => {
   }
 });
 
+// Test add points endpoint
+app.post("/test-add-points", async (req, res) => {
+  const { contactId, points, description } = req.body;
+
+  if (!contactId || !points) {
+    return res.status(400).json({
+      success: false,
+      error: "Missing required fields: contactId and points",
+    });
+  }
+
+  console.log(
+    `🧪 Testing add points: ${points} points to contact ${contactId}`
+  );
+
+  try {
+    // First try to get the point account
+    const accountId = await getPointAccount(contactId);
+
+    if (accountId) {
+      console.log(`   ✅ Using existing point account: ${accountId}`);
+      const result = await addPointsToVoyado(
+        accountId,
+        points,
+        description || "Test points"
+      );
+      res.json({
+        success: true,
+        message: `Successfully added ${points} points using point account ${accountId}`,
+        result,
+      });
+    } else {
+      console.log(`   ❌ No point account found for contact: ${contactId}`);
+      res.status(400).json({
+        success: false,
+        error: `No point account found for contact: ${contactId}. Points cannot be added without an existing point account.`,
+      });
+      return;
+    }
+  } catch (error) {
+    console.error(`   ❌ Failed to add points: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Get latest CSAT event
 app.get("/latest-csat", (req, res) => {
   if (!latestCsatEvent) {
@@ -378,6 +398,7 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`
   );
+  console.log(`🧪 Test add points endpoint: ${localAddress}/test-add-points`);
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
