@@ -1,6 +1,53 @@
 # Dixa-Voyado Webhook Service
 
-A web service built with Express.js that handles CSAT rating webhooks from Dixa and integrates with the Voyado Points API to award loyalty points based on customer satisfaction scores.
+A Node.js integration service that automatically converts customer satisfaction (CSAT) ratings from Dixa into loyalty points in the Voyado platform. This service serves as a bridge between two customer experience systems, creating a seamless feedback-to-rewards workflow that transforms customer feedback into actionable loyalty rewards.
+
+## Executive Summary
+
+### **Service Overview**
+
+The Dixa-Voyado Webhook Service is a production-ready Node.js integration that automatically converts customer satisfaction (CSAT) ratings from Dixa into loyalty points in the Voyado platform. It serves as a bridge between two customer experience systems, creating a seamless feedback-to-rewards workflow.
+
+### **Core Functionality**
+
+- **CSAT Processing**: Receives customer satisfaction ratings (1-5 scale) from Dixa via webhooks
+- **Smart Point Allocation**: Automatically awards loyalty points based on satisfaction scores:
+  - Low scores (≤2): 10 points (compensation)
+  - Neutral scores (3): 5 points (default)
+  - High scores (≥4): 15 points (reward)
+- **Contact Matching**: Uses customer email addresses to identify users across both platforms
+- **Point Management**: Integrates with Voyado's point transaction system using unique transaction IDs
+
+### **Technical Architecture**
+
+- **Framework**: Express.js web service
+- **Deployment**: Railway cloud platform with automatic HTTPS
+- **Integration**: RESTful API connections to both Dixa and Voyado
+- **Data Flow**: Asynchronous webhook processing with error handling and logging
+
+### **Key Business Value**
+
+1. **Automated Customer Rewards**: Eliminates manual point allocation based on feedback
+2. **Enhanced Customer Experience**: Provides immediate recognition for both positive and negative feedback
+3. **Data-Driven Loyalty**: Creates measurable connection between service quality and rewards
+4. **Operational Efficiency**: Reduces manual work in customer service and loyalty management
+
+### **Current Status**
+
+- **Production Ready**: Deployed and operational on Railway
+- **Live Integration**: Connected to both Dixa and Voyado staging environments
+- **Monitoring**: Includes health checks and event logging for operational visibility
+- **Testing**: Comprehensive test endpoints for validation and debugging
+
+### **Technical Specifications**
+
+- **Language**: Node.js (v18+)
+- **Dependencies**: Express, Axios, UUID, dotenv
+- **Endpoints**: 6 API endpoints including webhooks, health checks, and testing
+- **Security**: API key authentication, HTTPS enforcement
+- **Scalability**: Cloud-native deployment with automatic scaling
+
+This service represents a strategic integration that transforms customer feedback into actionable loyalty rewards, enhancing both customer satisfaction and retention through automated, data-driven point allocation.
 
 ## Features
 
