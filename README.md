@@ -68,6 +68,15 @@ sequenceDiagram
     participant Voyado as Voyado API
     participant DB as Voyado Database
 
+    Note over Dixa,DB: Setup Phase
+
+    %% Step 0: Schema Registration
+    Service->>Voyado: POST /api/v3/interactionschemas
+    Note right of Service: Register DixaCSATScore schema<br/>with csatScore, conversationId,<br/>supportChannel fields
+    Voyado->>DB: Store schema definition
+    DB-->>Voyado: Schema registered
+    Voyado-->>Service: 200 OK
+
     Note over Dixa,DB: CSAT Rating Flow
 
     %% Step 1: Dixa sends CSAT webhook
@@ -110,18 +119,18 @@ sequenceDiagram
 
     %% Step 7: Service confirms success
     Service->>Service: Log success
-    Service-->>Dixa: 200 OK
 ```
 
 ### Key Data Flow Steps
 
-1. **CSAT Webhook Reception**: Dixa sends rating data to the service
-2. **Point Calculation**: Service calculates loyalty points based on CSAT score
-3. **Contact Lookup**: Service finds the customer's Voyado contact ID
-4. **Point Account Retrieval**: Service gets the customer's point account ID
-5. **Points Addition**: Service adds points to Voyado with unique transaction ID
-6. **Interaction Storage**: Service stores CSAT data in Voyado contact profile
-7. **Success Confirmation**: Service confirms completion to Dixa
+1. **Schema Registration**: Register the DixaCSATScore interaction schema in Voyado
+2. **CSAT Webhook Reception**: Dixa sends rating data to the service
+3. **Point Calculation**: Service calculates loyalty points based on CSAT score
+4. **Contact Lookup**: Service finds the customer's Voyado contact ID
+5. **Point Account Retrieval**: Service gets the customer's point account ID
+6. **Points Addition**: Service adds points to Voyado with unique transaction ID
+7. **Interaction Storage**: Service stores CSAT data in Voyado contact profile
+8. **Success Confirmation**: Service confirms completion to Dixa
 
 ## CSAT Interaction Schema
 
@@ -149,9 +158,27 @@ The service now stores detailed CSAT data in Voyado contact profiles using a cus
 ### **Business Benefits**
 
 - **Contact Enrichment**: CSAT scores visible in Voyado contact cards
-- **Segmentation**: Create segments like "High CSAT customers" or "Low CSAT customers"
+- **Advanced Segmentation**: Create segments like "High CSAT customers" or "Low CSAT customers" using the filtering tool
 - **Analytics**: Track CSAT trends by channel, agent, or time period
 - **Personalization**: Use CSAT history for targeted campaigns and offers
+- **Customer Insights**: Identify patterns in customer satisfaction across different support channels
+- **Automated Targeting**: Trigger automated campaigns based on CSAT scores and support channel preferences
+
+### **Segmentation Capabilities**
+
+According to the [Voyado Interaction Segmentation documentation](https://developer.voyado.com/en/interactions/interaction-segmentation.html), our schema enables powerful segmentation features:
+
+- **Filtering Tool Integration**: CSAT scores and support channels appear in Voyado's filtering tool for easy segmentation
+- **Multi-Property Segmentation**: Segment customers by CSAT score, support channel, or conversation ID
+- **Date Range Filtering**: Filter interactions by specific time periods
+- **Automation Triggers**: Use CSAT data to trigger automated email campaigns and promotions
+- **Contact Card Display**: CSAT data is visible directly in customer contact cards for agent reference
+
+### **Schema Limitations**
+
+- **Maximum 15 interaction schemas** per Voyado environment
+- **Maximum 6 segmentable properties** per schema (our schema uses 2: `csatScore` and `supportChannel`)
+- **Supported Types**: Boolean, String, Integer, Number (our schema uses Integer and String)
 
 ### **Schema Registration**
 
