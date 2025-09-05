@@ -173,11 +173,13 @@ async function storeCSATInteraction(
   supportChannel
 ) {
   try {
-    const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/${contactId}/interactions`;
+    const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/interactions`;
 
     const payload = {
-      interactionSchemaId: "DixaCSATScore",
-      data: {
+      contactId: contactId,
+      schemaId: "DixaCSATScore",
+      createdDate: new Date().toISOString(),
+      payload: {
         csatScore: csatScore,
         conversationId: conversationId,
         supportChannel: supportChannel,
@@ -313,37 +315,6 @@ app.post("/webhook/dixa/csat", (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error processing Dixa CSAT webhook:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Voyado Point Balance Webhook Endpoint
-app.post("/webhook/voyado/points", (req, res) => {
-  try {
-    const event = req.body;
-
-    // Validate the webhook event
-    if (!event.eventType || event.eventType !== "point.balance.updated") {
-      return res.status(400).json({ error: "Invalid event type" });
-    }
-
-    const payload = event.payload;
-
-    console.log("💰 Voyado Points Balance Updated:");
-    console.log(`   Account ID: ${payload.accountId}`);
-    console.log(`   Contact ID: ${payload.contactId}`);
-    console.log(`   New Balance: ${payload.balance}`);
-    console.log(`   Balance Expires: ${payload.balanceExpires}`);
-    console.log(`   Definition ID: ${payload.definitionId}`);
-    console.log(`   Event ID: ${event.eventId}`);
-
-    res.status(200).json({
-      message: "Voyado points webhook processed successfully",
-      accountId: payload.accountId,
-      balance: payload.balance,
-    });
-  } catch (error) {
-    console.error("❌ Error processing Voyado points webhook:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -521,9 +492,6 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🌐 Network address: ${networkAddress}`);
   console.log(
     `📊 Dixa CSAT webhook endpoint: ${localAddress}/webhook/dixa/csat`
-  );
-  console.log(
-    `💰 Voyado points webhook endpoint: ${localAddress}/webhook/voyado/points`
   );
   console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
   console.log(

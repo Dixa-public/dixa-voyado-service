@@ -6,7 +6,7 @@ A Node.js integration service that automatically converts customer satisfaction 
 
 ### **Service Overview**
 
-The Dixa-Voyado Webhook Service is a production-ready Node.js integration that automatically converts customer satisfaction (CSAT) ratings from Dixa into loyalty points in the Voyado platform. It serves as a bridge between two customer experience systems, creating a seamless feedback-to-rewards workflow.
+The Dixa-Voyado Webhook Service is a Node.js integration that automatically converts customer satisfaction (CSAT) ratings from Dixa into loyalty points in the Voyado platform. It serves as a bridge between two customer experience systems, creating a seamless feedback-to-rewards workflow.
 
 ### **Core Functionality**
 
@@ -54,7 +54,6 @@ This service represents a strategic integration that transforms customer feedbac
 
 - **Dixa CSAT Webhook Handler**: Receives and processes customer satisfaction ratings
 - **Voyado Points Integration**: Automatically awards loyalty points based on CSAT scores
-- **Voyado Webhook Handler**: Receives point balance updates from Voyado
 - **Smart Point Calculation**: Different point amounts based on satisfaction scores
 - **CSAT Interaction Schema**: Stores detailed CSAT data in Voyado contact profiles for analytics and segmentation
 
@@ -102,23 +101,16 @@ sequenceDiagram
     DB-->>Voyado: Transaction created
     Voyado-->>Service: 202 Accepted
 
-    %% Step 6: Service confirms success
+    %% Step 6: Store CSAT interaction data
+    Service->>Voyado: POST /api/v3/interactions
+    Note right of Service: Payload: {<br/>  contactId: "eb69b55a-d76b-4f45-b14a-b34d00865c2e",<br/>  schemaId: "DixaCSATScore",<br/>  payload: {<br/>    csatScore: 4,<br/>    conversationId: 12345,<br/>    supportChannel: "Chat"<br/>  }<br/>}
+    Voyado->>DB: Store interaction data
+    DB-->>Voyado: Interaction stored
+    Voyado-->>Service: 200 OK
+
+    %% Step 7: Service confirms success
     Service->>Service: Log success
     Service-->>Dixa: 200 OK
-
-    Note over Dixa,DB: Point Balance Update Flow (Async)
-
-    %% Step 7: Voyado processes transaction asynchronously
-    Voyado->>DB: Update point balance
-    DB-->>Voyado: Balance updated
-
-    %% Step 8: Voyado sends webhook notification
-    Voyado->>Service: POST /webhook/voyado/points
-    Note right of Voyado: Payload: {<br/>  eventType: "point.balance.updated",<br/>  payload: {<br/>    accountId: 123,<br/>    balance: 1015.1234,<br/>    contactId: "eb69b55a-d76b-4f45-b14a-b34d00865c2e"<br/>  }<br/>}
-
-    %% Step 9: Service logs webhook
-    Service->>Service: Log point balance update
-    Service-->>Voyado: 200 OK
 ```
 
 ### Key Data Flow Steps
@@ -128,13 +120,8 @@ sequenceDiagram
 3. **Contact Lookup**: Service finds the customer's Voyado contact ID
 4. **Point Account Retrieval**: Service gets the customer's point account ID
 5. **Points Addition**: Service adds points to Voyado with unique transaction ID
-6. **Balance Update Notification**: Voyado sends webhook confirming balance change
-
-## Point Calculation Logic
-
-- **Score ≤ 2**: 10 points (compensation for poor experience)
-- **Score = 3**: 5 points (default for neutral experience)
-- **Score ≥ 4**: 15 points (reward for good experience)
+6. **Interaction Storage**: Service stores CSAT data in Voyado contact profile
+7. **Success Confirmation**: Service confirms completion to Dixa
 
 ## CSAT Interaction Schema
 
@@ -184,13 +171,11 @@ Submit this schema to your Voyado instance:
         "type": "integer",
         "displayName": "CSAT score",
         "showInContactCard": "true",
-        "addToSegmentation": "true",
-        "minimum": 1,
-        "maximum": 5
+        "addToSegmentation": "true"
       },
       "conversationId": {
         "type": "integer",
-        "displayName": "Dixa conversation ID",
+        "displayName": "Conversation ID",
         "showInContactCard": "false",
         "addToSegmentation": "false"
       },
@@ -224,13 +209,11 @@ curl -X POST "https://<tenant>.voyado.com/api/v3/interactionschemas" \
           "type": "integer",
           "displayName": "CSAT score",
           "showInContactCard": "true",
-          "addToSegmentation": "true",
-          "minimum": 1,
-          "maximum": 5
+          "addToSegmentation": "true"
         },
         "conversationId": {
           "type": "integer",
-          "displayName": "Dixa conversation ID",
+          "displayName": "Conversation ID",
           "showInContactCard": "false",
           "addToSegmentation": "false"
         },
@@ -296,12 +279,6 @@ If you see this error:
 - Receives CSAT rating events from Dixa
 - Automatically calculates and awards points to Voyado
 
-### Voyado Points Webhook
-
-- **POST** `/webhook/voyado/points`
-- Receives point balance updates from Voyado
-- Logs balance changes for monitoring
-
 ### Utility Endpoints
 
 - **GET** `/latest-csat` - View the most recent CSAT event
@@ -323,14 +300,6 @@ Configure Dixa to send webhooks to:
 https://the-domain-you-deployed-this-service-on.com/webhook/dixa/csat
 ```
 
-### Voyado Webhook Setup
-
-Configure Voyado to send webhooks to:
-
-```
-https://the-domain-you-deployed-this-service-on.com/webhook/voyado/points
-```
-
 ## Demo
 
 A demo service is running on:
@@ -346,14 +315,6 @@ https://dixa-voyado-service-production.up.railway.app/webhook/dixa/csat
 ```
 
 ![Dixa Websocket Interface](dixa-websocket-interface.png)
-
-The Voyado webhooks is configured to:
-
-```
-https://dixa-voyado-service-production.up.railway.app/webhook/voyado/points
-```
-
-![Voyado Websocket Interface](voyado-websocket-interface.png)
 
 ## Example Usage
 
@@ -376,22 +337,6 @@ curl -X POST http://localhost:3000/webhook/dixa/csat \
           "email": "john@example.com"
         }
       }
-    }
-  }'
-```
-
-### Testing Voyado Webhook
-
-```bash
-curl -X POST http://localhost:3000/webhook/voyado/points \
-  -H "Content-Type: application/json" \
-  -d '{
-    "eventId": "31e61713-dd4d-4c3f-a470-990ef50b47c0",
-    "eventType": "point.balance.updated",
-    "payload": {
-      "accountId": 123,
-      "balance": 1000.1234,
-      "contactId": "cbe3f42c-c1d0-4721-b8ce-ab35001ce051"
     }
   }'
 ```
@@ -442,10 +387,9 @@ This service is designed to be deployed on Railway. Railway will automatically:
 
 ### Webhook URLs for Railway
 
-Once deployed, your webhook URLs will be:
+Once deployed, your webhook URL will be:
 
 - **Dixa CSAT**: `https://your-app-name.railway.app/webhook/dixa/csat`
-- **Voyado Points**: `https://your-app-name.railway.app/webhook/voyado/points`
 
 ## Security Considerations
 

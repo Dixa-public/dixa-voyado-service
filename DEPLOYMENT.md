@@ -61,7 +61,6 @@ Once deployed, Railway will provide you with a domain like:
 Your webhook endpoints will be:
 
 - **Dixa CSAT**: `https://your-app-name.railway.app/webhook/dixa/csat`
-- **Voyado Points**: `https://your-app-name.railway.app/webhook/voyado/points`
 - **Health Check**: `https://your-app-name.railway.app/health`
 
 ## Step 6: Configure Dixa Webhooks
@@ -70,11 +69,6 @@ Your webhook endpoints will be:
 2. **Add a new webhook** with URL: `https://your-app-name.railway.app/webhook/dixa/csat`
 3. **Select event type**: `CONVERSATION_RATED`
 4. **Save the webhook**
-
-## Step 7: Configure Voyado Webhooks
-
-1. **In Voyado**, configure webhooks to send to: `https://your-app-name.railway.app/webhook/voyado/points`
-2. **Select event type**: `point.balance.updated`
 
 ## Monitoring
 
