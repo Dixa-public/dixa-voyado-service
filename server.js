@@ -165,6 +165,56 @@ async function addPointsToVoyado(contactId, points, description) {
   }
 }
 
+// Helper function to store CSAT interaction data in Voyado
+async function storeCSATInteraction(
+  contactId,
+  csatScore,
+  conversationId,
+  supportChannel
+) {
+  try {
+    const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/contacts/${contactId}/interactions`;
+
+    const payload = {
+      interactionSchemaId: "DixaCSATScore",
+      data: {
+        csatScore: csatScore,
+        conversationId: conversationId,
+        supportChannel: supportChannel,
+      },
+    };
+
+    console.log(`📊 Storing CSAT interaction for contact ${contactId}`);
+    console.log(`   CSAT Score: ${csatScore}`);
+    console.log(`   Conversation ID: ${conversationId}`);
+    console.log(`   Support Channel: ${supportChannel}`);
+    console.log(`   Payload:`, JSON.stringify(payload, null, 2));
+
+    const response = await axios.post(interactionUrl, payload, {
+      headers: {
+        apikey: process.env.VOYADO_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(
+      `✅ Successfully stored CSAT interaction for contact ${contactId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error storing CSAT interaction: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    throw error;
+  }
+}
+
 // Dixa CSAT Rating Webhook Endpoint
 app.post("/webhook/dixa/csat", (req, res) => {
   try {
@@ -182,16 +232,23 @@ app.post("/webhook/dixa/csat", (req, res) => {
     const comment = event.data.comment;
     const contactEmail = event.data.conversation.requester.email;
     const contactName = event.data.conversation.requester.name;
+    const conversationId =
+      parseInt(event.data.conversation.id) ||
+      parseInt(event.event_id) ||
+      Date.now(); // Use conversation ID as integer or fallback to timestamp
+    const supportChannel = event.data.conversation.channel || "Other"; // Extract channel or default to "Other"
 
     console.log(
       `📊 CSAT Rating: ${score}/5 - "${comment}" from ${contactName} (${contactEmail})`
     );
+    console.log(`   Conversation ID: ${conversationId}`);
+    console.log(`   Support Channel: ${supportChannel}`);
 
     // Calculate points based on score
     const points = calculatePoints(score);
     console.log(`   Points to award: ${points}`);
 
-    // First lookup the contact ID in Voyado, then get point account, then add points
+    // First lookup the contact ID in Voyado, then get point account, then add points and store interaction
     let foundContactId = null;
     lookupContactId(contactEmail, "email")
       .then((contactId) => {
@@ -226,9 +283,26 @@ app.post("/webhook/dixa/csat", (req, res) => {
       })
       .then(() => {
         console.log(`   ✅ Points successfully added to Voyado`);
+
+        // Store CSAT interaction data in Voyado (if contact was found)
+        if (foundContactId) {
+          console.log(`   📊 Storing CSAT interaction data...`);
+          return storeCSATInteraction(
+            foundContactId,
+            score,
+            conversationId,
+            supportChannel
+          );
+        } else {
+          console.log(`   ⚠️  Skipping interaction storage - no contact found`);
+          return null;
+        }
+      })
+      .then(() => {
+        console.log(`   ✅ CSAT interaction data successfully stored`);
       })
       .catch((error) => {
-        console.error(`   ❌ Failed to add points to Voyado: ${error.message}`);
+        console.error(`   ❌ Failed to process CSAT data: ${error.message}`);
       });
 
     res.status(200).json({
@@ -355,6 +429,67 @@ app.post("/test-add-points", async (req, res) => {
   }
 });
 
+// Test CSAT interaction endpoint
+app.post("/test-csat-interaction", async (req, res) => {
+  const { contactId, csatScore, conversationId, supportChannel } = req.body;
+
+  if (!contactId || !csatScore) {
+    return res.status(400).json({
+      success: false,
+      error: "Missing required fields: contactId and csatScore",
+    });
+  }
+
+  // Validate CSAT score
+  if (csatScore < 1 || csatScore > 5) {
+    return res.status(400).json({
+      success: false,
+      error: "CSAT score must be between 1 and 5",
+    });
+  }
+
+  // Validate support channel
+  const validChannels = ["Chat", "Email", "Phone", "Social", "Other"];
+  const channel = supportChannel || "Other";
+  if (!validChannels.includes(channel)) {
+    return res.status(400).json({
+      success: false,
+      error: `Support channel must be one of: ${validChannels.join(", ")}`,
+    });
+  }
+
+  console.log(
+    `🧪 Testing CSAT interaction: Score ${csatScore} for contact ${contactId}`
+  );
+
+  try {
+    const result = await storeCSATInteraction(
+      contactId,
+      csatScore,
+      conversationId || Date.now(),
+      channel
+    );
+
+    res.json({
+      success: true,
+      message: `Successfully stored CSAT interaction for contact ${contactId}`,
+      data: {
+        contactId,
+        csatScore,
+        conversationId: conversationId || Date.now(),
+        supportChannel: channel,
+      },
+      result,
+    });
+  } catch (error) {
+    console.error(`   ❌ Failed to store CSAT interaction: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Get latest CSAT event
 app.get("/latest-csat", (req, res) => {
   if (!latestCsatEvent) {
@@ -395,6 +530,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     `🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`
   );
   console.log(`🧪 Test add points endpoint: ${localAddress}/test-add-points`);
+  console.log(
+    `🧪 Test CSAT interaction endpoint: ${localAddress}/test-csat-interaction`
+  );
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
 
