@@ -25,7 +25,7 @@ The Dixa-Voyado Webhook Service is a Node.js integration that automatically conv
 
 - **Review Webhook Processing**: Receives review submissions from Voyado with contact identifiers
 - **Contact Identifier Priority**: Supports contactId, email, or phone number (E.164 format) with priority ordering
-- **Voyado Interactions API**: Fetches additional product and comment details from Voyado's Interactions API
+- **Voyado Interactions API**: Fetches product review interactions using the `completedProductRating` schema from Voyado's Interactions API
 - **Dixa End User Management**: Automatically looks up existing end users or creates new ones in Dixa
 - **Dixa Conversation Creation**: Creates conversations in Dixa via the Public API using the email channel
 - **Configuration Flexibility**: Supports environment variables with webhook payload overrides
@@ -142,29 +142,37 @@ sequenceDiagram
     Service->>Service: Parse webhook payload
     Service->>Service: Extract contact identifiers<br/>(contactId, email, phone)
 
-    %% Step 10: Fetch additional interaction details (optional)
-    Service->>Voyado: GET /api/v3/interactions/{interactionId}
-    Note right of Service: Headers: apikey, User-Agent
-    Voyado->>VoyadoDB: Query interaction details
-    VoyadoDB-->>Voyado: Return interaction data
-    Voyado-->>Service: 200 OK: {productName: "Product", comment: "Great!"}
+    %% Step 10: Fetch all interactions for contact by schema
+    Service->>Voyado: GET /api/v3/interactions?contactId=voyado-123&schemaId=completedProductRating
+    Note right of Service: Headers: apikey, User-Agent<br/>Query all interactions for contact with completedProductRating schema
+    Voyado->>VoyadoDB: Query interactions by contactId and schemaId
+    VoyadoDB-->>Voyado: Return interactions array (sorted by date)
+    Voyado-->>Service: 200 OK: [{id: "interaction-456", createdDate: "2024-01-15T10:30:00Z", ...}, ...]
 
-    %% Step 11: Lookup existing end user in Dixa
+    %% Step 11: Select most recent interaction and fetch detailed data
+    Service->>Service: Select most recent interaction (first in array)
+    Service->>Voyado: GET /api/v3/interactions/interaction-456
+    Note right of Service: Headers: apikey, User-Agent<br/>Fetch detailed data for most recent interaction
+    Voyado->>VoyadoDB: Query specific interaction details
+    VoyadoDB-->>Voyado: Return complete interaction data
+    Voyado-->>Service: 200 OK: {payload: {productName: "Product", comment: "Great!", rating: 5, ...}}
+
+    %% Step 12: Lookup existing end user in Dixa
     Service->>DixaAPI: GET /v1/endusers?email=customer@example.com
     Note right of Service: Headers: Authorization, User-Agent
     DixaAPI-->>Service: 200 OK: [] (no existing user)
 
-    %% Step 12: Create new end user in Dixa
+    %% Step 13: Create new end user in Dixa
     Service->>DixaAPI: POST /v1/endusers
     Note right of Service: Payload: {<br/>  displayName: "Customer",<br/>  email: "customer@example.com",<br/>  externalId: "voyado-123"<br/>}
     DixaAPI-->>Service: 201 Created: {id: "dixa-user-456"}
 
-    %% Step 13: Create conversation in Dixa
+    %% Step 14: Create conversation in Dixa
     Service->>DixaAPI: POST /v1/conversations
     Note right of Service: Payload: {<br/>  requesterId: "dixa-user-456",<br/>  subject: "Review from Voyado",<br/>  message: {<br/>    content: {value: "Review submitted via Voyado", _type: "Html"},<br/>    _type: "Inbound"<br/>  },<br/>  _type: "Email"<br/>}
     DixaAPI-->>Service: 200 OK: {data: {id: "dixa-conversation-789"}}
 
-    %% Step 14: Service confirms success
+    %% Step 15: Service confirms success
     Service->>Service: Log success
     Service-->>Voyado: 200 OK: {conversationId: "dixa-conversation-789", endUserId: "dixa-user-456"}
 ```
@@ -172,6 +180,7 @@ sequenceDiagram
 ### Key Data Flow Steps
 
 #### **CSAT Rating Flow (Dixa → Voyado)**
+
 1. **Schema Registration**: Register the DixaCSATScore interaction schema in Voyado
 2. **CSAT Webhook Reception**: Dixa sends rating data to the service
 3. **Point Calculation**: Service calculates loyalty points based on CSAT score
@@ -182,13 +191,17 @@ sequenceDiagram
 8. **Success Confirmation**: Service confirms completion to Dixa
 
 #### **Review Submission Flow (Voyado → Dixa)**
+
 1. **Review Webhook Reception**: Voyado sends review submission data to the service
 2. **Contact Identifier Extraction**: Service extracts contact identifiers (contactId, email, phone)
-3. **Interaction Details Fetch**: Service fetches additional details from Voyado Interactions API (optional)
-4. **End User Lookup**: Service looks up existing end user in Dixa using contact identifiers
-5. **End User Creation**: Service creates new end user in Dixa if none found
-6. **Conversation Creation**: Service creates conversation in Dixa with proper requesterId
-7. **Success Confirmation**: Service confirms completion to Voyado with conversation and end user IDs
+3. **Interactions Schema Lookup**: Service fetches all interactions for contact using `completedProductRating` schema
+4. **Most Recent Selection**: Service selects the most recent interaction from the results
+5. **Detailed Interaction Fetch**: Service fetches complete interaction details for the selected interaction
+6. **Data Enrichment**: Service merges interaction data (product name, comment, rating) with webhook data
+7. **End User Lookup**: Service looks up existing end user in Dixa using contact identifiers
+8. **End User Creation**: Service creates new end user in Dixa if none found
+9. **Conversation Creation**: Service creates conversation in Dixa with proper requesterId
+10. **Success Confirmation**: Service confirms completion to Voyado with conversation and end user IDs
 
 ## CSAT Interaction Schema
 
@@ -371,7 +384,7 @@ If you see this error:
 - Automatically looks up or creates end users in Dixa
 - Creates conversations in Dixa via the Public API
 - Supports contact identification via contactId, email, or phone number (E.164 format)
-- Fetches additional details from Voyado's Interactions API
+- Fetches product review details from Voyado's Interactions API using the `completedProductRating` schema
 - Configurable via environment variables with webhook payload overrides
 
 ### Utility Endpoints
@@ -387,6 +400,7 @@ If you see this error:
 - **POST** `/test-voyado-review` - Test Voyado review webhook processing
 - **GET** `/test-dixa-enduser-lookup` - Test Dixa end user lookup
 - **POST** `/test-dixa-enduser-create` - Test Dixa end user creation
+- **GET** `/test-voyado-interactions` - Test Voyado interactions lookup
 
 ## Webhook Configuration
 
@@ -425,7 +439,7 @@ The webhook payload can optionally override environment variables:
   "email": "customer@example.com",
   "phone": "+1234567890",
   "rating": 5,
-  "interactionId": "interaction-123",
+  "schemaId": "completedProductRating",
   "dixaApiToken": "custom_api_token_override",
   "dixaEmailIntegrationId": "custom_email_integration_override"
 }
@@ -457,6 +471,18 @@ The service automatically manages Dixa end users as part of the review processin
    - External ID (Voyado contactId, if provided)
 
 3. **Conversation Creation**: Uses the end user ID (existing or newly created) to create the conversation in Dixa
+
+#### Voyado Interactions Integration
+
+The service integrates with Voyado's Interactions API to fetch product review details:
+
+1. **Schema-Based Lookup**: Uses the `completedProductRating` schema (default) to find product review interactions
+2. **Contact-Specific Queries**: Fetches all interactions for a contact using `GET /api/v3/interactions?contactId={contactId}&schemaId=completedProductRating`
+3. **Most Recent Selection**: Selects the most recent interaction from the results
+4. **Detailed Fetch**: Retrieves specific interaction details using `GET /api/v3/interactions/{interactionId}`
+5. **Data Enrichment**: Merges the interaction data (product name, comment, rating) into the conversation creation process
+
+This approach works specifically with **Lipscore** and **Trustvoice** review platforms that use the `completedProductRating` schema.
 
 This ensures that all conversations are properly associated with valid end users in Dixa, following the [Dixa End Users API requirements](https://docs.dixa.io/openapi/dixa-api/v1/tag/End-Users/#tag/End-Users/operation/getEndusers).
 
@@ -511,7 +537,7 @@ curl -X POST http://localhost:3000/webhook/voyado/review \
   -d '{
     "contactId": "cbe3f42c-c1d0-4721-b8ce-ab35001ce051",
     "rating": 5,
-    "interactionId": "interaction-123"
+    "schemaId": "completedProductRating"
   }'
 ```
 
@@ -523,7 +549,7 @@ curl -X POST http://localhost:3000/webhook/voyado/review \
   -d '{
     "email": "customer@example.com",
     "rating": 3,
-    "interactionId": "interaction-456"
+    "schemaId": "completedProductRating"
   }'
 ```
 
@@ -583,6 +609,20 @@ curl -X POST http://localhost:3000/test-dixa-enduser-create \
     "contactId": "voyado-contact-123",
     "displayName": "New Customer"
   }'
+```
+
+### Testing Voyado Interactions
+
+#### Example 1: Fetch Interactions for Contact
+
+```bash
+curl -X GET "http://localhost:3000/test-voyado-interactions?contactId=voyado-contact-123&schemaId=completedProductRating"
+```
+
+#### Example 2: Fetch Interactions with Default Schema
+
+```bash
+curl -X GET "http://localhost:3000/test-voyado-interactions?contactId=voyado-contact-123"
 ```
 
 ### Testing Voyado Review Webhook

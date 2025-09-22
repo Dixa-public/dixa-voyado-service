@@ -14,6 +14,7 @@ const WEBHOOK_ENDPOINT = `${BASE_URL}/webhook/voyado/review`;
 const TEST_ENDPOINT = `${BASE_URL}/test-voyado-review`;
 const DIXA_ENDUSER_LOOKUP_ENDPOINT = `${BASE_URL}/test-dixa-enduser-lookup`;
 const DIXA_ENDUSER_CREATE_ENDPOINT = `${BASE_URL}/test-dixa-enduser-create`;
+const VOYADO_INTERACTIONS_ENDPOINT = `${BASE_URL}/test-voyado-interactions`;
 
 // Test data examples
 const testCases = [
@@ -22,7 +23,7 @@ const testCases = [
     data: {
       contactId: "cbe3f42c-c1d0-4721-b8ce-ab35001ce051",
       rating: 5,
-      interactionId: "interaction-123",
+      schemaId: "completedProductRating",
     },
   },
   {
@@ -30,7 +31,7 @@ const testCases = [
     data: {
       email: "customer@example.com",
       rating: 3,
-      interactionId: "interaction-456",
+      schemaId: "completedProductRating",
     },
   },
   {
@@ -188,6 +189,37 @@ async function testDixaEndUserCreate(contactData) {
   }
 }
 
+async function testVoyadoInteractions(contactId, schemaId = "completedProductRating") {
+  console.log(`\n🧪 Testing Voyado interactions lookup`);
+  console.log(`📝 Contact ID: ${contactId}, Schema ID: ${schemaId}`);
+
+  try {
+    const queryParams = new URLSearchParams();
+    queryParams.append("contactId", contactId);
+    if (schemaId) queryParams.append("schemaId", schemaId);
+
+    const response = await axios.get(
+      `${VOYADO_INTERACTIONS_ENDPOINT}?${queryParams.toString()}`,
+      {
+        timeout: 10000,
+      }
+    );
+
+    console.log(
+      `📧 Voyado interactions response:`,
+      JSON.stringify(response.data, null, 2)
+    );
+  } catch (error) {
+    console.log(
+      `❌ Voyado interactions error: ${error.response?.status || "Network Error"}`
+    );
+    console.log(
+      `📧 Error:`,
+      JSON.stringify(error.response?.data || error.message, null, 2)
+    );
+  }
+}
+
 async function runTests() {
   console.log(`🚀 Starting Voyado Review Webhook Tests`);
   console.log(`📍 Base URL: ${BASE_URL}`);
@@ -237,12 +269,17 @@ async function runTests() {
   await testDixaEndUserCreate(testContactData);
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
+  // Test Voyado interactions
+  await testVoyadoInteractions("test-contact-id", "completedProductRating");
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
   console.log(`\n✅ All tests completed!`);
   console.log(`\n📋 Test Summary:`);
   console.log(`   - Webhook endpoint: ${WEBHOOK_ENDPOINT}`);
   console.log(`   - Test endpoint: ${TEST_ENDPOINT}`);
   console.log(`   - Dixa end user lookup: ${DIXA_ENDUSER_LOOKUP_ENDPOINT}`);
   console.log(`   - Dixa end user create: ${DIXA_ENDUSER_CREATE_ENDPOINT}`);
+  console.log(`   - Voyado interactions: ${VOYADO_INTERACTIONS_ENDPOINT}`);
   console.log(`   - Total test cases: ${testCases.length}`);
   console.log(
     `   - Expected failures: ${testCases.filter((tc) => tc.shouldFail).length}`
@@ -280,6 +317,7 @@ module.exports = {
   testTestEndpoint,
   testDixaEndUserLookup,
   testDixaEndUserCreate,
+  testVoyadoInteractions,
   runTests,
   testCases,
 };
