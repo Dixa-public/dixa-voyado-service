@@ -70,25 +70,26 @@ This service represents a strategic integration that transforms customer feedbac
 
 ## System Architecture
 
-The following sequence diagram illustrates the complete data flow from Dixa CSAT rating to Voyado points integration:
+The following sequence diagram illustrates the complete bidirectional data flow between Dixa and Voyado platforms:
 
 ```mermaid
 sequenceDiagram
     participant Dixa as Dixa Platform
     participant Service as Dixa-Voyado Service
     participant Voyado as Voyado API
-    participant DB as Voyado Database
+    participant VoyadoDB as Voyado Database
+    participant DixaAPI as Dixa API
 
-    Note over Dixa,DB: Setup Phase
+    Note over Dixa,DixaAPI: Setup Phase
 
     %% Step 0: Schema Registration
     Service->>Voyado: POST /api/v3/interactionschemas
     Note right of Service: Register DixaCSATScore schema<br/>with csatScore, conversationId,<br/>supportChannel fields
-    Voyado->>DB: Store schema definition
-    DB-->>Voyado: Schema registered
+    Voyado->>VoyadoDB: Store schema definition
+    VoyadoDB-->>Voyado: Schema registered
     Voyado-->>Service: 200 OK
 
-    Note over Dixa,DB: CSAT Rating Flow
+    Note over Dixa,DixaAPI: CSAT Rating Flow (Dixa → Voyado)
 
     %% Step 1: Dixa sends CSAT webhook
     Dixa->>Service: POST /webhook/dixa/csat
@@ -102,38 +103,75 @@ sequenceDiagram
     %% Step 3: Lookup contact ID in Voyado
     Service->>Voyado: GET /api/v3/contacts/id?email=test@domain.com
     Note right of Service: Headers: apikey, User-Agent
-    Voyado->>DB: Query contact by email
-    DB-->>Voyado: Return contact ID
+    Voyado->>VoyadoDB: Query contact by email
+    VoyadoDB-->>Voyado: Return contact ID
     Voyado-->>Service: 200 OK: "eb69b55a-d76b-4f45-b14a-b34d00865c2e"
 
     %% Step 4: Get point account ID
     Service->>Voyado: GET /api/v3/point-accounts?contactId={contactId}
     Note right of Service: Headers: apikey, User-Agent
-    Voyado->>DB: Query point accounts by contact ID
-    DB-->>Voyado: Return point account details
+    Voyado->>VoyadoDB: Query point accounts by contact ID
+    VoyadoDB-->>Voyado: Return point account details
     Voyado-->>Service: 200 OK: [{id: "84415149-b3b4-4eca-8404-bde4230d50bf", ...}]
 
     %% Step 5: Add points to Voyado
     Service->>Service: Generate unique transactionId (UUID)
     Service->>Voyado: POST /api/v3/point-transactions
     Note right of Service: Payload: {<br/>  accountId: "84415149-b3b4-4eca-8404-bde4230d50bf",<br/>  transactionId: "uuid-here",<br/>  amount: 15,<br/>  description: "CSAT feedback Loyalty points added",<br/>  ...<br/>}
-    Voyado->>DB: Create point transaction
-    DB-->>Voyado: Transaction created
+    Voyado->>VoyadoDB: Create point transaction
+    VoyadoDB-->>Voyado: Transaction created
     Voyado-->>Service: 202 Accepted
 
     %% Step 6: Store CSAT interaction data
     Service->>Voyado: POST /api/v3/interactions
     Note right of Service: Payload: {<br/>  contactId: "eb69b55a-d76b-4f45-b14a-b34d00865c2e",<br/>  schemaId: "DixaCSATScore",<br/>  payload: {<br/>    csatScore: 4,<br/>    conversationId: 12345,<br/>    supportChannel: "Chat"<br/>  }<br/>}
-    Voyado->>DB: Store interaction data
-    DB-->>Voyado: Interaction stored
+    Voyado->>VoyadoDB: Store interaction data
+    VoyadoDB-->>Voyado: Interaction stored
     Voyado-->>Service: 200 OK
 
     %% Step 7: Service confirms success
     Service->>Service: Log success
+
+    Note over Dixa,DixaAPI: Review Submission Flow (Voyado → Dixa)
+
+    %% Step 8: Voyado sends review webhook
+    Voyado->>Service: POST /webhook/voyado/review
+    Note right of Voyado: Review Submission Event<br/>contactId: "voyado-123", rating: 5
+
+    %% Step 9: Service processes review webhook
+    Service->>Service: Parse webhook payload
+    Service->>Service: Extract contact identifiers<br/>(contactId, email, phone)
+
+    %% Step 10: Fetch additional interaction details (optional)
+    Service->>Voyado: GET /api/v3/interactions/{interactionId}
+    Note right of Service: Headers: apikey, User-Agent
+    Voyado->>VoyadoDB: Query interaction details
+    VoyadoDB-->>Voyado: Return interaction data
+    Voyado-->>Service: 200 OK: {productName: "Product", comment: "Great!"}
+
+    %% Step 11: Lookup existing end user in Dixa
+    Service->>DixaAPI: GET /v1/endusers?email=customer@example.com
+    Note right of Service: Headers: Authorization, User-Agent
+    DixaAPI-->>Service: 200 OK: [] (no existing user)
+
+    %% Step 12: Create new end user in Dixa
+    Service->>DixaAPI: POST /v1/endusers
+    Note right of Service: Payload: {<br/>  displayName: "Customer",<br/>  email: "customer@example.com",<br/>  externalId: "voyado-123"<br/>}
+    DixaAPI-->>Service: 201 Created: {id: "dixa-user-456"}
+
+    %% Step 13: Create conversation in Dixa
+    Service->>DixaAPI: POST /v1/conversations
+    Note right of Service: Payload: {<br/>  requesterId: "dixa-user-456",<br/>  subject: "Review from Voyado",<br/>  message: {<br/>    content: {value: "Review submitted via Voyado", _type: "Html"},<br/>    _type: "Inbound"<br/>  },<br/>  _type: "Email"<br/>}
+    DixaAPI-->>Service: 200 OK: {data: {id: "dixa-conversation-789"}}
+
+    %% Step 14: Service confirms success
+    Service->>Service: Log success
+    Service-->>Voyado: 200 OK: {conversationId: "dixa-conversation-789", endUserId: "dixa-user-456"}
 ```
 
 ### Key Data Flow Steps
 
+#### **CSAT Rating Flow (Dixa → Voyado)**
 1. **Schema Registration**: Register the DixaCSATScore interaction schema in Voyado
 2. **CSAT Webhook Reception**: Dixa sends rating data to the service
 3. **Point Calculation**: Service calculates loyalty points based on CSAT score
@@ -142,6 +180,15 @@ sequenceDiagram
 6. **Points Addition**: Service adds points to Voyado with unique transaction ID
 7. **Interaction Storage**: Service stores CSAT data in Voyado contact profile
 8. **Success Confirmation**: Service confirms completion to Dixa
+
+#### **Review Submission Flow (Voyado → Dixa)**
+1. **Review Webhook Reception**: Voyado sends review submission data to the service
+2. **Contact Identifier Extraction**: Service extracts contact identifiers (contactId, email, phone)
+3. **Interaction Details Fetch**: Service fetches additional details from Voyado Interactions API (optional)
+4. **End User Lookup**: Service looks up existing end user in Dixa using contact identifiers
+5. **End User Creation**: Service creates new end user in Dixa if none found
+6. **Conversation Creation**: Service creates conversation in Dixa with proper requesterId
+7. **Success Confirmation**: Service confirms completion to Voyado with conversation and end user IDs
 
 ## CSAT Interaction Schema
 
