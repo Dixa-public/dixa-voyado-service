@@ -217,6 +217,346 @@ async function storeCSATInteraction(
   }
 }
 
+// Helper function to fetch Voyado interaction details
+async function fetchVoyadoInteractionDetails(contactId, interactionId) {
+  try {
+    const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/interactions/${interactionId}`;
+
+    console.log(
+      `🔍 Fetching interaction details for contact ${contactId}, interaction ${interactionId}`
+    );
+
+    const response = await axios.get(interactionUrl, {
+      headers: {
+        apikey: process.env.VOYADO_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(`📡 Interaction details response status: ${response.status}`);
+    console.log(
+      `📡 Interaction details:`,
+      JSON.stringify(response.data, null, 2)
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error fetching interaction details: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    return null;
+  }
+}
+
+// Helper function to lookup end user in Dixa
+async function lookupDixaEndUser(contactData, config) {
+  try {
+    const dixaUrl = "https://dev.dixa.io/v1/endusers";
+
+    // Build query parameters based on available contact data
+    const queryParams = new URLSearchParams();
+
+    if (contactData.email) {
+      queryParams.append("email", contactData.email);
+    }
+
+    if (contactData.phone) {
+      queryParams.append("phoneNumber", contactData.phone);
+    }
+
+    if (contactData.contactId) {
+      queryParams.append("externalId", contactData.contactId);
+    }
+
+    const lookupUrl = `${dixaUrl}?${queryParams.toString()}`;
+
+    console.log(
+      `🔍 Looking up Dixa end user with query: ${queryParams.toString()}`
+    );
+
+    const response = await axios.get(lookupUrl, {
+      headers: {
+        Authorization: config.apiToken,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(`📡 Dixa end user lookup response status: ${response.status}`);
+    console.log(
+      `📡 Dixa end user lookup response:`,
+      JSON.stringify(response.data, null, 2)
+    );
+
+    // Check if we found any end users
+    if (response.data && response.data.data && response.data.data.length > 0) {
+      const endUser = response.data.data[0];
+      console.log(`✅ Found existing Dixa end user: ${endUser.id}`);
+      return endUser;
+    } else {
+      console.log(`❌ No existing Dixa end user found`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error looking up Dixa end user: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    return null;
+  }
+}
+
+// Helper function to create end user in Dixa
+async function createDixaEndUser(contactData, config) {
+  try {
+    const dixaUrl = "https://dev.dixa.io/v1/endusers";
+
+    // Prepare end user payload
+    const endUserPayload = {
+      displayName:
+        contactData.displayName ||
+        contactData.email ||
+        contactData.phone ||
+        "Voyado Customer",
+      email: contactData.email,
+      phoneNumber: contactData.phone,
+      externalId: contactData.contactId,
+    };
+
+    // Remove undefined/null values
+    Object.keys(endUserPayload).forEach((key) => {
+      if (endUserPayload[key] === undefined || endUserPayload[key] === null) {
+        delete endUserPayload[key];
+      }
+    });
+
+    console.log(`👤 Creating Dixa end user`);
+    console.log(`👤 Payload:`, JSON.stringify(endUserPayload, null, 2));
+
+    const response = await axios.post(dixaUrl, endUserPayload, {
+      headers: {
+        Authorization: config.apiToken,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(`✅ Successfully created Dixa end user`);
+    console.log(`👤 Response:`, JSON.stringify(response.data, null, 2));
+
+    return response.data.data;
+  } catch (error) {
+    console.error(`❌ Error creating Dixa end user: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    throw error;
+  }
+}
+
+// Helper function to get or create Dixa end user
+async function getOrCreateDixaEndUser(contactData, config) {
+  try {
+    // First, try to lookup existing end user
+    console.log(`🔍 Looking up existing Dixa end user...`);
+    let endUser = await lookupDixaEndUser(contactData, config);
+
+    if (endUser) {
+      return endUser;
+    }
+
+    // If no end user found, create a new one
+    console.log(`👤 No existing end user found, creating new one...`);
+    endUser = await createDixaEndUser(contactData, config);
+
+    return endUser;
+  } catch (error) {
+    console.error(
+      `❌ Error getting or creating Dixa end user: ${error.message}`
+    );
+    throw error;
+  }
+}
+
+// Helper function to create Dixa conversation
+async function createDixaConversation(endUser, interactionData, config) {
+  try {
+    const dixaUrl = "https://dev.dixa.io/v1/conversations";
+
+    // Prepare the conversation payload
+    const conversationPayload = {
+      requesterId: endUser.id,
+      emailIntegrationId: config.emailIntegrationId || "",
+      subject: `Review from Voyado`,
+      message: {
+        content: {
+          value: "Review submitted via Voyado",
+          _type: "Html",
+        },
+        attachments: [],
+        _type: "Inbound",
+      },
+      _type: "Email",
+    };
+
+    console.log(`📧 Creating Dixa conversation for end user: ${endUser.id}`);
+    console.log(`📧 Payload:`, JSON.stringify(conversationPayload, null, 2));
+
+    const response = await axios.post(dixaUrl, conversationPayload, {
+      headers: {
+        Authorization: config.apiToken,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(`✅ Successfully created Dixa conversation`);
+    console.log(`📧 Response:`, JSON.stringify(response.data, null, 2));
+
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error creating Dixa conversation: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    throw error;
+  }
+}
+
+// Voyado Review Webhook Endpoint
+app.post("/webhook/voyado/review", async (req, res) => {
+  try {
+    const reviewData = req.body;
+
+    console.log(
+      `📝 Received Voyado review webhook:`,
+      JSON.stringify(reviewData, null, 2)
+    );
+
+    // Validate required fields
+    if (!reviewData.contactId && !reviewData.email && !reviewData.phone) {
+      return res.status(400).json({
+        error:
+          "Missing required contact identifier. Must provide at least one of: contactId, email, or phone",
+      });
+    }
+
+    // Extract contact information with priority: contactId > email > phone
+    const contactData = {
+      contactId: reviewData.contactId,
+      email: reviewData.email,
+      phone: reviewData.phone,
+    };
+
+    // Get configuration (with webhook payload overrides)
+    const config = {
+      emailIntegrationId:
+        reviewData.dixaEmailIntegrationId ||
+        process.env.DIXA_EMAIL_INTEGRATION_ID,
+      apiToken: reviewData.dixaApiToken || process.env.DIXA_PUBLIC_API_TOKEN,
+    };
+
+    // Validate configuration
+    if (!config.apiToken) {
+      return res.status(500).json({
+        error:
+          "Missing Dixa API token. Set DIXA_PUBLIC_API_TOKEN environment variable or provide dixaApiToken in webhook payload",
+      });
+    }
+
+    // Fetch additional interaction details if interactionId is provided
+    let interactionData = {
+      rating: reviewData.rating,
+    };
+
+    if (reviewData.interactionId && contactData.contactId) {
+      console.log(`🔍 Fetching additional interaction details...`);
+      const details = await fetchVoyadoInteractionDetails(
+        contactData.contactId,
+        reviewData.interactionId
+      );
+      if (details) {
+        // Merge additional details from Voyado
+        interactionData = {
+          ...interactionData,
+          ...details.payload,
+        };
+      }
+    }
+
+    // Get or create Dixa end user
+    console.log(`👤 Getting or creating Dixa end user...`);
+    const endUser = await getOrCreateDixaEndUser(contactData, config);
+
+    // Create Dixa conversation
+    console.log(`📧 Creating Dixa conversation...`);
+    const conversation = await createDixaConversation(
+      endUser,
+      interactionData,
+      config
+    );
+
+    res.status(200).json({
+      message: "Review webhook processed successfully",
+      conversationId: conversation.data?.id,
+      endUserId: endUser.id,
+      contactData: contactData,
+      interactionData: interactionData,
+    });
+  } catch (error) {
+    console.error("❌ Error processing Voyado review webhook:", error);
+
+    // Return appropriate error status based on error type
+    if (error.response) {
+      const status = error.response.status;
+      if (status === 400) {
+        return res.status(400).json({
+          error: "Invalid request data",
+          details: error.response.data,
+        });
+      } else if (status === 401) {
+        return res.status(401).json({
+          error: "Unauthorized - check API token",
+          details: error.response.data,
+        });
+      } else if (status === 404) {
+        return res.status(404).json({
+          error: "Resource not found",
+          details: error.response.data,
+        });
+      } else {
+        return res.status(500).json({
+          error: "External API error",
+          details: error.response.data,
+        });
+      }
+    } else {
+      return res.status(500).json({
+        error: "Internal server error",
+        details: error.message,
+      });
+    }
+  }
+});
+
 // Dixa CSAT Rating Webhook Endpoint
 app.post("/webhook/dixa/csat", (req, res) => {
   try {
@@ -400,6 +740,163 @@ app.post("/test-add-points", async (req, res) => {
   }
 });
 
+// Test Dixa end user lookup endpoint
+app.get("/test-dixa-enduser-lookup", async (req, res) => {
+  const { email, phone, contactId } = req.query;
+
+  if (!email && !phone && !contactId) {
+    return res.status(400).json({
+      success: false,
+      error: "Must provide at least one of: email, phone, or contactId",
+    });
+  }
+
+  console.log(`🧪 Testing Dixa end user lookup`);
+
+  try {
+    const contactData = { email, phone, contactId };
+    const config = {
+      apiToken: process.env.DIXA_PUBLIC_API_TOKEN,
+    };
+
+    if (!config.apiToken) {
+      return res.status(500).json({
+        success: false,
+        error: "Missing DIXA_PUBLIC_API_TOKEN environment variable",
+      });
+    }
+
+    const endUser = await lookupDixaEndUser(contactData, config);
+
+    if (endUser) {
+      res.json({
+        success: true,
+        message: "End user found",
+        endUser: endUser,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "No end user found",
+        contactData: contactData,
+      });
+    }
+  } catch (error) {
+    console.error(`   ❌ Failed to lookup Dixa end user: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Test Dixa end user creation endpoint
+app.post("/test-dixa-enduser-create", async (req, res) => {
+  const { email, phone, contactId, displayName } = req.body;
+
+  if (!email && !phone && !contactId) {
+    return res.status(400).json({
+      success: false,
+      error: "Must provide at least one of: email, phone, or contactId",
+    });
+  }
+
+  console.log(`🧪 Testing Dixa end user creation`);
+
+  try {
+    const contactData = { email, phone, contactId, displayName };
+    const config = {
+      apiToken: process.env.DIXA_PUBLIC_API_TOKEN,
+    };
+
+    if (!config.apiToken) {
+      return res.status(500).json({
+        success: false,
+        error: "Missing DIXA_PUBLIC_API_TOKEN environment variable",
+      });
+    }
+
+    const endUser = await createDixaEndUser(contactData, config);
+
+    res.json({
+      success: true,
+      message: "End user created successfully",
+      endUser: endUser,
+    });
+  } catch (error) {
+    console.error(`   ❌ Failed to create Dixa end user: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Test Voyado review webhook endpoint
+app.post("/test-voyado-review", async (req, res) => {
+  const {
+    contactId,
+    email,
+    phone,
+    interactionId,
+    rating,
+    dixaApiToken,
+    dixaEmailIntegrationId,
+  } = req.body;
+
+  if (!contactId && !email && !phone) {
+    return res.status(400).json({
+      success: false,
+      error:
+        "Missing required contact identifier. Must provide at least one of: contactId, email, or phone",
+    });
+  }
+
+  console.log(`🧪 Testing Voyado review webhook processing`);
+
+  try {
+    // Simulate the webhook payload
+    const webhookPayload = {
+      contactId,
+      email,
+      phone,
+      interactionId,
+      rating,
+      dixaApiToken,
+      dixaEmailIntegrationId,
+    };
+
+    // Create a mock request/response to test the webhook logic
+    const mockReq = { body: webhookPayload };
+    const mockRes = {
+      status: (code) => ({
+        json: (data) => {
+          res.status(code).json({
+            success: code >= 200 && code < 300,
+            testResult: data,
+            webhookPayload: webhookPayload,
+          });
+        },
+      }),
+    };
+
+    // Call the webhook handler logic directly
+    await app._router.stack
+      .find(
+        (layer) => layer.route && layer.route.path === "/webhook/voyado/review"
+      )
+      .route.stack[0].handle(mockReq, mockRes);
+  } catch (error) {
+    console.error(
+      `   ❌ Failed to test Voyado review webhook: ${error.message}`
+    );
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Test CSAT interaction endpoint
 app.post("/test-csat-interaction", async (req, res) => {
   const { contactId, csatScore, conversationId, supportChannel } = req.body;
@@ -493,6 +990,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `📊 Dixa CSAT webhook endpoint: ${localAddress}/webhook/dixa/csat`
   );
+  console.log(
+    `📝 Voyado Review webhook endpoint: ${localAddress}/webhook/voyado/review`
+  );
   console.log(`🔍 Latest CSAT endpoint: ${localAddress}/latest-csat`);
   console.log(
     `🧪 Test lookup endpoint: ${localAddress}/test-lookup/:type/:identifier`
@@ -500,6 +1000,15 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🧪 Test add points endpoint: ${localAddress}/test-add-points`);
   console.log(
     `🧪 Test CSAT interaction endpoint: ${localAddress}/test-csat-interaction`
+  );
+  console.log(
+    `🧪 Test Voyado review endpoint: ${localAddress}/test-voyado-review`
+  );
+  console.log(
+    `🧪 Test Dixa end user lookup: ${localAddress}/test-dixa-enduser-lookup`
+  );
+  console.log(
+    `🧪 Test Dixa end user create: ${localAddress}/test-dixa-enduser-create`
   );
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
