@@ -189,7 +189,10 @@ async function testDixaEndUserCreate(contactData) {
   }
 }
 
-async function testVoyadoInteractions(contactId, schemaId = "completedProductRating") {
+async function testVoyadoInteractions(
+  contactId,
+  schemaId = "completedProductRating"
+) {
   console.log(`\n🧪 Testing Voyado interactions lookup`);
   console.log(`📝 Contact ID: ${contactId}, Schema ID: ${schemaId}`);
 
@@ -211,7 +214,9 @@ async function testVoyadoInteractions(contactId, schemaId = "completedProductRat
     );
   } catch (error) {
     console.log(
-      `❌ Voyado interactions error: ${error.response?.status || "Network Error"}`
+      `❌ Voyado interactions error: ${
+        error.response?.status || "Network Error"
+      }`
     );
     console.log(
       `📧 Error:`,

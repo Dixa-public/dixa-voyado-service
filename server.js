@@ -218,7 +218,10 @@ async function storeCSATInteraction(
 }
 
 // Helper function to fetch Voyado interactions for a contact by schema
-async function fetchVoyadoInteractionsBySchema(contactId, schemaId = "completedProductRating") {
+async function fetchVoyadoInteractionsBySchema(
+  contactId,
+  schemaId = "completedProductRating"
+) {
   try {
     const interactionsUrl = `${process.env.VOYADO_API_BASE_URL}/interactions?contactId=${contactId}&schemaId=${schemaId}`;
 
@@ -235,10 +238,7 @@ async function fetchVoyadoInteractionsBySchema(contactId, schemaId = "completedP
     });
 
     console.log(`📡 Interactions response status: ${response.status}`);
-    console.log(
-      `📡 Interactions:`,
-      JSON.stringify(response.data, null, 2)
-    );
+    console.log(`📡 Interactions:`, JSON.stringify(response.data, null, 2));
 
     return response.data;
   } catch (error) {
@@ -259,7 +259,9 @@ async function fetchVoyadoInteractionDetails(interactionId) {
   try {
     const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/interactions/${interactionId}`;
 
-    console.log(`🔍 Fetching specific interaction details for ${interactionId}`);
+    console.log(
+      `🔍 Fetching specific interaction details for ${interactionId}`
+    );
 
     const response = await axios.get(interactionUrl, {
       headers: {
@@ -524,20 +526,24 @@ app.post("/webhook/voyado/review", async (req, res) => {
 
     if (contactData.contactId) {
       console.log(`🔍 Fetching interactions for contact...`);
-      
+
       // First, get all interactions for the contact with the completedProductRating schema
       const interactions = await fetchVoyadoInteractionsBySchema(
         contactData.contactId,
         reviewData.schemaId || "completedProductRating"
       );
-      
+
       if (interactions && interactions.data && interactions.data.length > 0) {
         // Get the most recent interaction (first in the array, assuming they're sorted by date)
         const mostRecentInteraction = interactions.data[0];
-        console.log(`📅 Most recent interaction ID: ${mostRecentInteraction.id}`);
-        
+        console.log(
+          `📅 Most recent interaction ID: ${mostRecentInteraction.id}`
+        );
+
         // Fetch detailed information for the most recent interaction
-        const details = await fetchVoyadoInteractionDetails(mostRecentInteraction.id);
+        const details = await fetchVoyadoInteractionDetails(
+          mostRecentInteraction.id
+        );
         if (details) {
           // Merge additional details from Voyado
           interactionData = {
@@ -547,7 +553,9 @@ app.post("/webhook/voyado/review", async (req, res) => {
           };
         }
       } else {
-        console.log(`📭 No interactions found for contact ${contactData.contactId}`);
+        console.log(
+          `📭 No interactions found for contact ${contactData.contactId}`
+        );
       }
     }
 
@@ -860,30 +868,34 @@ app.get("/test-voyado-interactions", async (req, res) => {
 
     if (interactions && interactions.data && interactions.data.length > 0) {
       const mostRecentInteraction = interactions.data[0];
-      
+
       // Fetch detailed information for the most recent interaction
-      const details = await fetchVoyadoInteractionDetails(mostRecentInteraction.id);
-      
+      const details = await fetchVoyadoInteractionDetails(
+        mostRecentInteraction.id
+      );
+
       res.json({
         success: true,
         message: "Interactions found",
         totalInteractions: interactions.data.length,
         mostRecentInteraction: {
           id: mostRecentInteraction.id,
-          details: details
+          details: details,
         },
-        allInteractions: interactions.data
+        allInteractions: interactions.data,
       });
     } else {
       res.status(404).json({
         success: false,
         message: "No interactions found",
         contactId: contactId,
-        schemaId: schemaId || "completedProductRating"
+        schemaId: schemaId || "completedProductRating",
       });
     }
   } catch (error) {
-    console.error(`   ❌ Failed to fetch Voyado interactions: ${error.message}`);
+    console.error(
+      `   ❌ Failed to fetch Voyado interactions: ${error.message}`
+    );
     res.status(500).json({
       success: false,
       error: error.message,
