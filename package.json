@@ -1,7 +1,7 @@
 {
   "name": "dixa-voyado-webhook-service",
   "version": "1.0.0",
-  "description": "Web service to handle Dixa CSAT webhooks and integrate with Voyado points API",
+  "description": "Web service to handle Dixa CSAT webhooks, Voyado review webhooks, and integrate with both Dixa and Voyado APIs",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

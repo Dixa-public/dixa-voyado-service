@@ -1,6 +1,6 @@
 # Dixa-Voyado Webhook Service
 
-A Node.js integration service that automatically converts customer satisfaction (CSAT) ratings from Dixa into loyalty points in the Voyado platform. This service serves as a bridge between two customer experience systems, creating a seamless feedback-to-rewards workflow that transforms customer feedback into actionable loyalty rewards.
+A Node.js integration service that handles bidirectional communication between Dixa and Voyado platforms. This service serves as a bridge between two customer experience systems, creating seamless workflows that transform customer feedback into actionable loyalty rewards and review submissions into support conversations.
 
 ## Executive Summary
 
@@ -10,6 +10,8 @@ The Dixa-Voyado Webhook Service is a Node.js integration that automatically conv
 
 ### **Core Functionality**
 
+#### **Dixa to Voyado Integration (CSAT Processing)**
+
 - **CSAT Processing**: Receives customer satisfaction ratings (1-5 scale) from Dixa via webhooks
 - **Smart Point Allocation**: Automatically awards loyalty points based on satisfaction scores:
   - Low scores (≤2): 10 points (compensation)
@@ -18,6 +20,15 @@ The Dixa-Voyado Webhook Service is a Node.js integration that automatically conv
 - **Contact Matching**: Uses customer email addresses to identify users across both platforms
 - **Point Management**: Integrates with Voyado's point transaction system using unique transaction IDs
 - **Interaction Data Storage**: Stores CSAT data in Voyado contact profiles using custom interaction schema for analytics and segmentation
+
+#### **Voyado to Dixa Integration (Review Processing)**
+
+- **Review Webhook Processing**: Receives review submissions from Voyado with contact identifiers
+- **Contact Identifier Priority**: Supports contactId, email, or phone number (E.164 format) with priority ordering
+- **Voyado Interactions API**: Fetches additional product and comment details from Voyado's Interactions API
+- **Dixa End User Management**: Automatically looks up existing end users or creates new ones in Dixa
+- **Dixa Conversation Creation**: Creates conversations in Dixa via the Public API using the email channel
+- **Configuration Flexibility**: Supports environment variables with webhook payload overrides
 
 ### **Technical Architecture**
 
@@ -306,6 +317,16 @@ If you see this error:
 - Receives CSAT rating events from Dixa
 - Automatically calculates and awards points to Voyado
 
+### Voyado Review Webhook
+
+- **POST** `/webhook/voyado/review`
+- Receives review submissions from Voyado
+- Automatically looks up or creates end users in Dixa
+- Creates conversations in Dixa via the Public API
+- Supports contact identification via contactId, email, or phone number (E.164 format)
+- Fetches additional details from Voyado's Interactions API
+- Configurable via environment variables with webhook payload overrides
+
 ### Utility Endpoints
 
 - **GET** `/latest-csat` - View the most recent CSAT event
@@ -316,6 +337,9 @@ If you see this error:
 - **GET** `/test-lookup/:type/:identifier` - Test contact lookup by email or phone
 - **POST** `/test-add-points` - Test adding points to a contact
 - **POST** `/test-csat-interaction` - Test storing CSAT interaction data
+- **POST** `/test-voyado-review` - Test Voyado review webhook processing
+- **GET** `/test-dixa-enduser-lookup` - Test Dixa end user lookup
+- **POST** `/test-dixa-enduser-create` - Test Dixa end user creation
 
 ## Webhook Configuration
 
@@ -326,6 +350,68 @@ Configure Dixa to send webhooks to:
 ```
 https://the-domain-you-deployed-this-service-on.com/webhook/dixa/csat
 ```
+
+### Voyado Webhook Setup
+
+Configure Voyado to send review webhooks to:
+
+```
+https://the-domain-you-deployed-this-service-on.com/webhook/voyado/review
+```
+
+#### Required Environment Variables
+
+Set these environment variables for the Voyado to Dixa integration:
+
+```bash
+DIXA_PUBLIC_API_TOKEN=your_dixa_api_token_here
+DIXA_EMAIL_INTEGRATION_ID=your_email_integration_id_here  # Optional
+```
+
+#### Webhook Payload Override Support
+
+The webhook payload can optionally override environment variables:
+
+```json
+{
+  "contactId": "cbe3f42c-c1d0-4721-b8ce-ab35001ce051",
+  "email": "customer@example.com",
+  "phone": "+1234567890",
+  "rating": 5,
+  "interactionId": "interaction-123",
+  "dixaApiToken": "custom_api_token_override",
+  "dixaEmailIntegrationId": "custom_email_integration_override"
+}
+```
+
+#### Contact Identifier Priority
+
+The service uses the following priority order for contact identification:
+
+1. **contactId** (highest priority)
+2. **email** (medium priority)
+3. **phone** (lowest priority, E.164 format required)
+
+#### End User Management Flow
+
+The service automatically manages Dixa end users as part of the review processing workflow:
+
+1. **End User Lookup**: First attempts to find an existing end user in Dixa using:
+
+   - Email address (if provided)
+   - Phone number (if provided)
+   - External ID (contactId from Voyado, if provided)
+
+2. **End User Creation**: If no existing end user is found, creates a new one with:
+
+   - Display name (from webhook payload or defaults to email/phone)
+   - Email address (if provided)
+   - Phone number (if provided)
+   - External ID (Voyado contactId, if provided)
+
+3. **Conversation Creation**: Uses the end user ID (existing or newly created) to create the conversation in Dixa
+
+This ensures that all conversations are properly associated with valid end users in Dixa, following the [Dixa End Users API requirements](https://docs.dixa.io/openapi/dixa-api/v1/tag/End-Users/#tag/End-Users/operation/getEndusers).
 
 ## Demo
 
@@ -368,6 +454,56 @@ curl -X POST http://localhost:3000/webhook/dixa/csat \
   }'
 ```
 
+### Testing Voyado Review Webhook
+
+#### Example 1: Review with Contact ID
+
+```bash
+curl -X POST http://localhost:3000/webhook/voyado/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId": "cbe3f42c-c1d0-4721-b8ce-ab35001ce051",
+    "rating": 5,
+    "interactionId": "interaction-123"
+  }'
+```
+
+#### Example 2: Review with Email Address
+
+```bash
+curl -X POST http://localhost:3000/webhook/voyado/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "customer@example.com",
+    "rating": 3,
+    "interactionId": "interaction-456"
+  }'
+```
+
+#### Example 3: Review with Phone Number (E.164 format)
+
+```bash
+curl -X POST http://localhost:3000/webhook/voyado/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+1234567890",
+    "rating": 5
+  }'
+```
+
+#### Example 4: Review with API Token Override
+
+```bash
+curl -X POST http://localhost:3000/webhook/voyado/review \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId": "cbe3f42c-c1d0-4721-b8ce-ab35001ce051",
+    "rating": 4,
+    "dixaApiToken": "YOUR_CUSTOM_API_TOKEN_HERE",
+    "dixaEmailIntegrationId": "custom-email-integration-id"
+  }'
+```
+
 ### Testing CSAT Interaction Storage
 
 ```bash
@@ -381,13 +517,56 @@ curl -X POST http://localhost:3000/test-csat-interaction \
   }'
 ```
 
+### Testing Dixa End User Management
+
+#### Example 1: Lookup Existing End User
+
+```bash
+curl -X GET "http://localhost:3000/test-dixa-enduser-lookup?email=customer@example.com"
+```
+
+#### Example 2: Create New End User
+
+```bash
+curl -X POST http://localhost:3000/test-dixa-enduser-create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newcustomer@example.com",
+    "phone": "+1234567890",
+    "contactId": "voyado-contact-123",
+    "displayName": "New Customer"
+  }'
+```
+
+### Testing Voyado Review Webhook
+
+You can use the provided test script to test the Voyado review webhook functionality:
+
+```bash
+# Run the comprehensive test suite
+node test-voyado-review-webhook.js
+
+# Or test with a custom base URL
+TEST_BASE_URL=https://your-deployed-service.com node test-voyado-review-webhook.js
+```
+
+The test script includes:
+
+- Health check verification
+- Multiple test cases with different contact identifier types
+- Validation testing for missing required fields
+- API token override testing
+- Comprehensive error handling verification
+
 ## Environment Variables
 
-| Variable              | Description                   | Default  |
-| --------------------- | ----------------------------- | -------- |
-| `VOYADO_API_KEY`      | Voyado API authentication key | Required |
-| `VOYADO_API_BASE_URL` | Base URL for Voyado API       | Required |
-| `PORT`                | Server port                   | 3000     |
+| Variable                    | Description                          | Default  |
+| --------------------------- | ------------------------------------ | -------- |
+| `VOYADO_API_KEY`            | Voyado API authentication key        | Required |
+| `VOYADO_API_BASE_URL`       | Base URL for Voyado API              | Required |
+| `DIXA_PUBLIC_API_TOKEN`     | Dixa Public API authentication token | Required |
+| `DIXA_EMAIL_INTEGRATION_ID` | Dixa email integration ID            | Optional |
+| `PORT`                      | Server port                          | 3000     |
 
 ## Notes
 
@@ -409,14 +588,17 @@ This service is designed to be deployed on Railway. Railway will automatically:
 2. **Set environment variables** in Railway dashboard:
    - `VOYADO_API_KEY`: Your Voyado API key
    - `VOYADO_API_BASE_URL`: `https://yourdomain.voyado.com/api/v3`
+   - `DIXA_PUBLIC_API_TOKEN`: Your Dixa Public API token
+   - `DIXA_EMAIL_INTEGRATION_ID`: Your Dixa email integration ID (optional)
    - `PORT`: `8080`
 3. **Deploy** - Railway will automatically build and deploy your service
 
 ### Webhook URLs for Railway
 
-Once deployed, your webhook URL will be:
+Once deployed, your webhook URLs will be:
 
 - **Dixa CSAT**: `https://your-app-name.railway.app/webhook/dixa/csat`
+- **Voyado Review**: `https://your-app-name.railway.app/webhook/voyado/review`
 
 ## Security Considerations
 
