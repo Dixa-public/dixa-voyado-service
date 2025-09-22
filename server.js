@@ -217,14 +217,49 @@ async function storeCSATInteraction(
   }
 }
 
-// Helper function to fetch Voyado interaction details
-async function fetchVoyadoInteractionDetails(contactId, interactionId) {
+// Helper function to fetch Voyado interactions for a contact by schema
+async function fetchVoyadoInteractionsBySchema(contactId, schemaId = "completedProductRating") {
+  try {
+    const interactionsUrl = `${process.env.VOYADO_API_BASE_URL}/interactions?contactId=${contactId}&schemaId=${schemaId}`;
+
+    console.log(
+      `🔍 Fetching interactions for contact ${contactId} with schema ${schemaId}`
+    );
+
+    const response = await axios.get(interactionsUrl, {
+      headers: {
+        apikey: process.env.VOYADO_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "DixaVoyadoService/1.0",
+      },
+    });
+
+    console.log(`📡 Interactions response status: ${response.status}`);
+    console.log(
+      `📡 Interactions:`,
+      JSON.stringify(response.data, null, 2)
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error fetching interactions: ${error.message}`);
+    if (error.response) {
+      console.error(`❌ Response status: ${error.response.status}`);
+      console.error(
+        `❌ Response data:`,
+        JSON.stringify(error.response.data, null, 2)
+      );
+    }
+    return null;
+  }
+}
+
+// Helper function to fetch specific Voyado interaction details
+async function fetchVoyadoInteractionDetails(interactionId) {
   try {
     const interactionUrl = `${process.env.VOYADO_API_BASE_URL}/interactions/${interactionId}`;
 
-    console.log(
-      `🔍 Fetching interaction details for contact ${contactId}, interaction ${interactionId}`
-    );
+    console.log(`🔍 Fetching specific interaction details for ${interactionId}`);
 
     const response = await axios.get(interactionUrl, {
       headers: {
@@ -482,23 +517,37 @@ app.post("/webhook/voyado/review", async (req, res) => {
       });
     }
 
-    // Fetch additional interaction details if interactionId is provided
+    // Fetch additional interaction details if contactId is provided
     let interactionData = {
       rating: reviewData.rating,
     };
 
-    if (reviewData.interactionId && contactData.contactId) {
-      console.log(`🔍 Fetching additional interaction details...`);
-      const details = await fetchVoyadoInteractionDetails(
+    if (contactData.contactId) {
+      console.log(`🔍 Fetching interactions for contact...`);
+      
+      // First, get all interactions for the contact with the completedProductRating schema
+      const interactions = await fetchVoyadoInteractionsBySchema(
         contactData.contactId,
-        reviewData.interactionId
+        reviewData.schemaId || "completedProductRating"
       );
-      if (details) {
-        // Merge additional details from Voyado
-        interactionData = {
-          ...interactionData,
-          ...details.payload,
-        };
+      
+      if (interactions && interactions.data && interactions.data.length > 0) {
+        // Get the most recent interaction (first in the array, assuming they're sorted by date)
+        const mostRecentInteraction = interactions.data[0];
+        console.log(`📅 Most recent interaction ID: ${mostRecentInteraction.id}`);
+        
+        // Fetch detailed information for the most recent interaction
+        const details = await fetchVoyadoInteractionDetails(mostRecentInteraction.id);
+        if (details) {
+          // Merge additional details from Voyado
+          interactionData = {
+            ...interactionData,
+            ...details.payload,
+            interactionId: mostRecentInteraction.id,
+          };
+        }
+      } else {
+        console.log(`📭 No interactions found for contact ${contactData.contactId}`);
       }
     }
 
@@ -790,6 +839,58 @@ app.get("/test-dixa-enduser-lookup", async (req, res) => {
   }
 });
 
+// Test Voyado interactions endpoint
+app.get("/test-voyado-interactions", async (req, res) => {
+  const { contactId, schemaId } = req.query;
+
+  if (!contactId) {
+    return res.status(400).json({
+      success: false,
+      error: "Must provide contactId",
+    });
+  }
+
+  console.log(`🧪 Testing Voyado interactions lookup`);
+
+  try {
+    const interactions = await fetchVoyadoInteractionsBySchema(
+      contactId,
+      schemaId || "completedProductRating"
+    );
+
+    if (interactions && interactions.data && interactions.data.length > 0) {
+      const mostRecentInteraction = interactions.data[0];
+      
+      // Fetch detailed information for the most recent interaction
+      const details = await fetchVoyadoInteractionDetails(mostRecentInteraction.id);
+      
+      res.json({
+        success: true,
+        message: "Interactions found",
+        totalInteractions: interactions.data.length,
+        mostRecentInteraction: {
+          id: mostRecentInteraction.id,
+          details: details
+        },
+        allInteractions: interactions.data
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "No interactions found",
+        contactId: contactId,
+        schemaId: schemaId || "completedProductRating"
+      });
+    }
+  } catch (error) {
+    console.error(`   ❌ Failed to fetch Voyado interactions: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 // Test Dixa end user creation endpoint
 app.post("/test-dixa-enduser-create", async (req, res) => {
   const { email, phone, contactId, displayName } = req.body;
@@ -840,6 +941,7 @@ app.post("/test-voyado-review", async (req, res) => {
     phone,
     interactionId,
     rating,
+    schemaId,
     dixaApiToken,
     dixaEmailIntegrationId,
   } = req.body;
@@ -862,6 +964,7 @@ app.post("/test-voyado-review", async (req, res) => {
       phone,
       interactionId,
       rating,
+      schemaId,
       dixaApiToken,
       dixaEmailIntegrationId,
     };
@@ -1009,6 +1112,9 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   );
   console.log(
     `🧪 Test Dixa end user create: ${localAddress}/test-dixa-enduser-create`
+  );
+  console.log(
+    `🧪 Test Voyado interactions: ${localAddress}/test-voyado-interactions`
   );
   console.log(`❤️  Health check: ${localAddress}/health`);
 });
